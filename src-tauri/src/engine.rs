@@ -4,8 +4,9 @@ use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
 
+use std::collections::HashMap;
 use crate::filter;
-use crate::models::{AppState, ImportAnalysis, ProfileComponents, VersionConfig};
+use crate::models::{AppState, ImportAnalysis, PluginItem, ProfileComponents, ProfileDetails, ShortcutItem, VersionConfig};
 use zip::read::ZipArchive;
 use crate::process;
 
@@ -621,6 +622,8 @@ pub fn save_profile_custom(
     save_toolbars: bool,
     save_materials: bool,
     save_templates: bool,
+    icon: Option<String>,
+    color: Option<String>,
     state: &mut AppState,
 ) -> Result<(), String> {
     let trimmed = name.trim().to_string();
@@ -675,10 +678,196 @@ pub fn save_profile_custom(
     if !config.profiles.contains(&trimmed) {
         config.profiles.push(trimmed.clone());
     }
+
+    if icon.is_some() || color.is_some() {
+        let meta = config.profiles_metadata.entry(trimmed.clone()).or_default();
+        if icon.is_some() {
+            meta.icon = icon;
+        }
+        if color.is_some() {
+            meta.color = color;
+        }
+    }
+
     mark_recent(config, &trimmed);
     save_state(state);
 
     Ok(())
+}
+
+pub fn parse_shortcut_string(raw: &str) -> Option<(String, String)> {
+    let parts: Vec<&str> = raw.splitn(5, ' ').collect();
+    if parts.len() < 5 {
+        return None;
+    }
+    let ctrl = parts[0] == "1";
+    let alt = parts[1] == "1";
+    let shift = parts[2] == "1";
+    let key = parts[3];
+    let cmd = parts[4].to_string();
+
+    let mut mods = Vec::new();
+    if ctrl { mods.push("Ctrl"); }
+    if alt { mods.push("Alt"); }
+    if shift { mods.push("Shift"); }
+    mods.push(key);
+
+    let key_display = mods.join(" + ");
+    Some((key_display, cmd))
+}
+
+pub fn load_default_shortcuts_map() -> HashMap<String, String> {
+    let default_path = get_roaming_sketchup_path("SketchUp 2026").join("SharedPreferences.json");
+    let mut map = HashMap::new();
+    if default_path.exists() {
+        if let Ok(content) = fs::read_to_string(&default_path) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(settings) = val.get("Windows Only").and_then(|w| w.get("Settings")).and_then(|s| s.as_object()) {
+                    for (k, v) in settings {
+                        if k.starts_with("Shortcut_") {
+                            if let Some(raw) = v.as_str() {
+                                if let Some((key_display, cmd)) = parse_shortcut_string(raw) {
+                                    map.insert(cmd, key_display);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if map.is_empty() {
+        let hardcoded_defaults = [
+            ("selectDollyTool:", "H"),
+            ("selectImageIglooTool:", "I"),
+            ("selectOrbitTool:", "O"),
+            ("selectZoomTool:", "Z"),
+            ("viewZoomExtents:", "Shift + Z"),
+            ("selectArcTool:", "A"),
+            ("selectCircleTool:", "C"),
+            ("selectEraseTool:", "E"),
+            ("selectPaintTool:", "B"),
+            ("selectPushPullTool:", "P"),
+            ("selectRectangleTool:", "R"),
+            ("selectSelectionTool:", "Space"),
+            ("selectLassoSelectionTool:", "Shift + Space"),
+            ("selectLineTool:", "L"),
+            ("View/Edge Style/Back Edges", "K"),
+            ("selectMoveTool:", "M"),
+            ("Edit/Make Component...", "G"),
+            ("selectMeasureTool:", "T"),
+            ("selectOffsetTool:", "F"),
+            ("selectRotateTool:", "Q"),
+            ("selectScaleTool:", "S"),
+            ("Help/Search SketchUp", "Shift + S"),
+        ];
+        for (cmd, key) in hardcoded_defaults {
+            map.insert(cmd.to_string(), key.to_string());
+        }
+    }
+    map
+}
+
+pub fn get_profile_details(
+    version_display: &str,
+    profile_name: &str,
+    _state: &AppState,
+) -> Result<ProfileDetails, String> {
+    let roaming = get_roaming_sketchup_path(version_display);
+    let target_dir = get_profiles_dir(version_display).join(profile_name);
+
+    let (plugins_dir, shared_pref_path) = if target_dir.exists() {
+        (target_dir.join("Plugins"), target_dir.join("SharedPreferences.json"))
+    } else {
+        (roaming.join("Plugins"), roaming.join("SharedPreferences.json"))
+    };
+
+    // 1. Scan Plugins
+    let mut plugins = Vec::new();
+    if plugins_dir.exists() {
+        if let Ok(entries) = fs::read_dir(&plugins_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let fname = entry.file_name().to_string_lossy().to_string();
+                if path.is_file() && fname.ends_with(".rb") {
+                    let clean_name = fname.trim_end_matches(".rb").to_string();
+                    let is_ex = filter::is_excluded(&fname);
+                    plugins.push(PluginItem {
+                        name: clean_name,
+                        filename: fname,
+                        is_excluded: is_ex,
+                    });
+                } else if path.is_dir() {
+                    let rb_check = plugins_dir.join(format!("{}.rb", fname));
+                    if !rb_check.exists() {
+                        let is_ex = filter::is_excluded(&fname);
+                        plugins.push(PluginItem {
+                            name: fname.clone(),
+                            filename: fname,
+                            is_excluded: is_ex,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    plugins.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+
+    // 2. Parse Shortcuts & Diff
+    let default_map = load_default_shortcuts_map();
+    let mut custom_shortcuts = Vec::new();
+    let mut total_shortcuts_count = 0;
+
+    if shared_pref_path.exists() {
+        if let Ok(content) = fs::read_to_string(&shared_pref_path) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(settings) = val.get("Windows Only").and_then(|w| w.get("Settings")).and_then(|s| s.as_object()) {
+                    for (k, v) in settings {
+                        if k.starts_with("Shortcut_") {
+                            if let Some(raw) = v.as_str() {
+                                total_shortcuts_count += 1;
+                                if let Some((key_display, cmd)) = parse_shortcut_string(raw) {
+                                    match default_map.get(&cmd) {
+                                        None => {
+                                            custom_shortcuts.push(ShortcutItem {
+                                                raw: raw.to_string(),
+                                                key_display,
+                                                command: cmd,
+                                                is_custom: true,
+                                                original_key: None,
+                                            });
+                                        }
+                                        Some(orig_key) => {
+                                            if orig_key != &key_display {
+                                                custom_shortcuts.push(ShortcutItem {
+                                                    raw: raw.to_string(),
+                                                    key_display,
+                                                    command: cmd,
+                                                    is_custom: true,
+                                                    original_key: Some(orig_key.clone()),
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    custom_shortcuts.sort_by(|a, b| a.key_display.cmp(&b.key_display));
+
+    Ok(ProfileDetails {
+        profile_name: profile_name.to_string(),
+        plugins,
+        custom_shortcuts,
+        total_shortcuts_count,
+        default_shortcuts_count: default_map.len(),
+    })
 }
 
 pub fn analyze_import_source(source_path: &str) -> Result<ImportAnalysis, String> {
@@ -1065,4 +1254,31 @@ pub fn import_profile(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_shortcut() {
+        let (key, cmd) = parse_shortcut_string("0 0 0 H selectDollyTool:").unwrap();
+        assert_eq!(key, "H");
+        assert_eq!(cmd, "selectDollyTool:");
+
+        let (key, cmd) = parse_shortcut_string("1 0 1 O Edit/Item/TIG.Smart_offset").unwrap();
+        assert_eq!(key, "Ctrl + Shift + O");
+        assert_eq!(cmd, "Edit/Item/TIG.Smart_offset");
+
+        let (key, cmd) = parse_shortcut_string("1 1 0 F Extensions/Erode").unwrap();
+        assert_eq!(key, "Ctrl + Alt + F");
+        assert_eq!(cmd, "Extensions/Erode");
+    }
+
+    #[test]
+    fn test_default_shortcuts_map() {
+        let map = load_default_shortcuts_map();
+        assert!(!map.is_empty());
+        assert!(map.contains_key("selectDollyTool:"));
+    }
 }

@@ -37,20 +37,31 @@ pub fn check_for_updates(simulate: Option<&str>) -> UpdateInfo {
             let mut dl_url = String::new();
             if let Some(assets) = val["assets"].as_array() {
                 let target_arch = get_current_arch();
-                // 1. Try to find the exact architecture match (e.g., SuPS-x64-*.zip, SuPS-arm64-*.zip, SuPS-x86-*.zip)
+                // 1. Priority: Find NSIS Setup executable matching architecture
                 for asset in assets {
                     let name = asset["name"].as_str().unwrap_or("").to_lowercase();
-                    if name.contains(&target_arch) && (name.ends_with(".zip") || name.ends_with(".exe")) {
+                    if name.contains(&target_arch) && (name.contains("setup") || name.ends_with(".exe")) {
                         dl_url = asset["browser_download_url"].as_str().unwrap_or("").to_string();
                         break;
                     }
                 }
 
-                // 2. Fallback to any windows zip or exe if specific arch asset is not found
+                // 2. Fallback: Find matching arch zip package
                 if dl_url.is_empty() {
                     for asset in assets {
                         let name = asset["name"].as_str().unwrap_or("").to_lowercase();
-                        if name.ends_with(".zip") || name.ends_with(".exe") {
+                        if name.contains(&target_arch) && name.ends_with(".zip") {
+                            dl_url = asset["browser_download_url"].as_str().unwrap_or("").to_string();
+                            break;
+                        }
+                    }
+                }
+
+                // 3. Fallback to any windows setup or exe/zip
+                if dl_url.is_empty() {
+                    for asset in assets {
+                        let name = asset["name"].as_str().unwrap_or("").to_lowercase();
+                        if name.ends_with(".exe") || name.ends_with(".zip") {
                             dl_url = asset["browser_download_url"].as_str().unwrap_or("").to_string();
                             break;
                         }
@@ -80,11 +91,12 @@ pub fn check_for_updates(simulate: Option<&str>) -> UpdateInfo {
 pub fn download_update(url: &str, latest_version: &str) -> Result<PathBuf, String> {
     let temp_dir = std::env::temp_dir().join("su-profile-switcher-update");
     let _ = fs::create_dir_all(&temp_dir);
-    let dest = temp_dir.join(format!("update_{}.zip", latest_version));
+    let ext = if url.to_lowercase().ends_with(".exe") { "exe" } else { "zip" };
+    let dest = temp_dir.join(format!("update_{}.{}", latest_version, ext));
 
     if url.starts_with("http") {
         let resp = ureq::get(url)
-            .timeout(std::time::Duration::from_secs(30))
+            .timeout(std::time::Duration::from_secs(45))
             .call()
             .map_err(|e| e.to_string())?;
 
@@ -112,7 +124,8 @@ pub fn apply_update_and_restart(app: &tauri::AppHandle, download_url: Option<&st
         sim_exe
     };
 
-    let new_exe = if downloaded_file.extension().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("zip")).unwrap_or(false) {
+    let is_zip = downloaded_file.extension().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("zip")).unwrap_or(false);
+    let new_exe = if is_zip {
         // Extract exe from zip
         let file = fs::File::open(&downloaded_file).map_err(|e| e.to_string())?;
         let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
@@ -135,25 +148,45 @@ pub fn apply_update_and_restart(app: &tauri::AppHandle, download_url: Option<&st
         downloaded_file
     };
 
+    let exe_name_lower = new_exe.to_string_lossy().to_lowercase();
+    let is_installer = exe_name_lower.contains("setup") || exe_name_lower.contains("installer");
+
     // Windows update batch script
     let current_pid = std::process::id();
     let bat_path = temp_dir.join("apply_update.bat");
-    let bat_content = format!(
-        "@echo off\r\n\
-        chcp 65001 > nul\r\n\
-        :wait_loop\r\n\
-        tasklist /fi \"PID eq {pid}\" | find \"{pid}\" > nul\r\n\
-        if %ERRORLEVEL% == 0 (\r\n\
-            timeout /t 1 /nobreak > nul\r\n\
-            goto wait_loop\r\n\
-        )\r\n\
-        copy /y \"{new_exe}\" \"{current_exe}\" > nul\r\n\
-        start \"\" \"{current_exe}\"\r\n\
-        del \"%~f0\"\r\n",
-        pid = current_pid,
-        new_exe = new_exe.to_string_lossy(),
-        current_exe = current_exe.to_string_lossy()
-    );
+    let bat_content = if is_installer {
+        format!(
+            "@echo off\r\n\
+            chcp 65001 > nul\r\n\
+            :wait_loop\r\n\
+            tasklist /fi \"PID eq {pid}\" | find \"{pid}\" > nul\r\n\
+            if %ERRORLEVEL% == 0 (\r\n\
+                timeout /t 1 /nobreak > nul\r\n\
+                goto wait_loop\r\n\
+            )\r\n\
+            start \"\" \"{installer}\"\r\n\
+            del \"%~f0\"\r\n",
+            pid = current_pid,
+            installer = new_exe.to_string_lossy()
+        )
+    } else {
+        format!(
+            "@echo off\r\n\
+            chcp 65001 > nul\r\n\
+            :wait_loop\r\n\
+            tasklist /fi \"PID eq {pid}\" | find \"{pid}\" > nul\r\n\
+            if %ERRORLEVEL% == 0 (\r\n\
+                timeout /t 1 /nobreak > nul\r\n\
+                goto wait_loop\r\n\
+            )\r\n\
+            copy /y \"{new_exe}\" \"{current_exe}\" > nul\r\n\
+            start \"\" \"{current_exe}\"\r\n\
+            del \"%~f0\"\r\n",
+            pid = current_pid,
+            new_exe = new_exe.to_string_lossy(),
+            current_exe = current_exe.to_string_lossy()
+        )
+    };
 
     fs::write(&bat_path, bat_content).map_err(|e| e.to_string())?;
 

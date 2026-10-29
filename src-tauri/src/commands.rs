@@ -1,5 +1,5 @@
-use tauri::State;
-use crate::models::{AppState, ImportAnalysis, ProfileComponents, UpdateInfo};
+use tauri::{Emitter, State};
+use crate::models::{AppState, ImportAnalysis, ProfileComponents, ProfileDetails, UpdateInfo};
 use crate::{engine, hash, process, updater, AppStateWrapper};
 
 #[tauri::command]
@@ -214,6 +214,8 @@ pub fn save_profile_custom(
     save_toolbars: bool,
     save_materials: bool,
     save_templates: bool,
+    icon: Option<String>,
+    color: Option<String>,
     state_wrap: State<'_, AppStateWrapper>,
     app: tauri::AppHandle,
 ) -> Result<AppState, String> {
@@ -226,10 +228,23 @@ pub fn save_profile_custom(
         save_toolbars,
         save_materials,
         save_templates,
+        icon,
+        color,
         &mut state,
     )?;
     crate::tray::update_tray_menu(&app);
+    let _ = app.emit("profiles-updated", &*state);
     Ok(state.clone())
+}
+
+#[tauri::command]
+pub fn get_profile_details(
+    version: String,
+    profile_name: String,
+    state_wrap: State<'_, AppStateWrapper>,
+) -> Result<ProfileDetails, String> {
+    let state = state_wrap.0.lock().unwrap();
+    engine::get_profile_details(&version, &profile_name, &state)
 }
 
 #[tauri::command]

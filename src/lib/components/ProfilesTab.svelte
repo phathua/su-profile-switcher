@@ -6,6 +6,7 @@
     Stop,
     ArrowsClockwise,
     PencilSimple,
+    Eye,
     Trash,
     FolderSimpleStar,
     Folder,
@@ -75,6 +76,10 @@
 
   function handleOpenRenameModal(profile) {
     appStore.modal = { type: "rename", oldName: profile };
+  }
+
+  function handleOpenViewModal(profile) {
+    appStore.modal = { type: "view_profile", profileName: profile };
   }
 
   function handleDelete(profile) {
@@ -223,6 +228,14 @@
                 <ArrowsClockwise size={13} weight="bold" />
               </button>
             {/if}
+
+            <button
+              onclick={() => handleOpenViewModal(profile)}
+              class="p-1.5 hover:bg-[#e2e8f0] dark:hover:bg-[#1e1e26] rounded text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0284c7] dark:hover:text-[#00c8ff] transition-colors cursor-pointer"
+              title="Xem chi tiết"
+            >
+              <Eye size={13} />
+            </button>
 
             <button
               onclick={() => handleOpenRenameModal(profile)}

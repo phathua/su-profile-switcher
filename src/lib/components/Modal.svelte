@@ -6,6 +6,7 @@
     updateProfileMetadata,
     saveProfileCustom,
     switchProfile,
+    getProfileDetails,
     t,
   } from "../store.svelte.js";
   import { invoke } from "@tauri-apps/api/core";
@@ -17,6 +18,8 @@
     CloudArrowDown,
     Plus,
     PencilSimple,
+    Eye,
+    MagnifyingGlass,
     CheckCircle,
     PuzzlePiece,
     Keyboard,
@@ -71,6 +74,11 @@
   let saveTemplates = $state(false);
   let downloadingUpdate = $state(false);
 
+  let profileDetails = $state(null);
+  let isLoadingDetails = $state(false);
+  let viewTab = $state("plugins");
+  let searchKeyword = $state("");
+
   $effect(() => {
     if (appStore.modal) {
       if (appStore.modal.type === "rename") {
@@ -89,11 +97,22 @@
         const hh = String(now.getHours()).padStart(2, "0");
         const min = String(now.getMinutes()).padStart(2, "0");
         newProfileName = `Profile_${mm}${dd}_${hh}${min}`;
+        selectedIcon = "Folder";
+        selectedColor = "#00c8ff";
         savePlugins = true;
         saveShortcuts = true;
         saveToolbars = false;
         saveMaterials = false;
         saveTemplates = false;
+      } else if (appStore.modal.type === "view_profile") {
+        profileDetails = null;
+        isLoadingDetails = true;
+        viewTab = "plugins";
+        searchKeyword = "";
+        getProfileDetails(appStore.modal.profileName).then((res) => {
+          profileDetails = res;
+          isLoadingDetails = false;
+        });
       }
     }
   });
@@ -147,7 +166,9 @@
       saveShortcuts,
       saveToolbars,
       saveMaterials,
-      saveTemplates
+      saveTemplates,
+      selectedIcon,
+      selectedColor
     );
     closeModal();
   }
@@ -206,7 +227,7 @@
   <!-- Overlay Backdrop -->
   <div class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
     <!-- Modal Container -->
-    <div class="bg-[#ffffff] dark:bg-[#0a0a0d] border border-[#cbd5e1] dark:border-[#222228] rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in duration-100">
+    <div class="bg-[#ffffff] dark:bg-[#0a0a0d] border border-[#cbd5e1] dark:border-[#222228] rounded-xl shadow-2xl w-full {appStore.modal?.type === 'view_profile' ? 'max-w-xl' : 'max-w-sm'} overflow-hidden animate-in fade-in duration-100">
       
       <!-- 1. Create Profile Modal -->
       {#if appStore.modal.type === "create_profile" || appStore.modal.type === "save"}
@@ -216,12 +237,12 @@
               <Plus size={15} weight="bold" class="text-[#0284c7] dark:text-[#00c8ff]" />
               <span class="text-xs font-bold text-[#0f172a] dark:text-[#fafafa]">{t("createProfileHeading")}</span>
             </div>
-            <button onclick={closeModal} class="text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0f172a] dark:hover:text-white cursor-pointer">
+            <button onclick={closeModal} class="text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0f172a] dark:hover:text-white cursor-pointer" title="Đóng">
               <X size={14} weight="bold" />
             </button>
           </div>
 
-          <div class="space-y-2">
+          <div class="space-y-2.5">
             <div>
               <label class="block text-[11px] font-semibold text-[#64748b] dark:text-[#a1a1aa] mb-1" for="modalProfName">
                 {t("profileNameLabel")}
@@ -234,8 +255,50 @@
               />
             </div>
 
+            <!-- Icon Picker -->
+            <div>
+              <span class="block text-[11px] font-semibold text-[#64748b] dark:text-[#a1a1aa] mb-1">
+                {t("iconLabel")}
+              </span>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                {#each availableIcons as item}
+                  <button
+                    type="button"
+                    onclick={() => (selectedIcon = item.name)}
+                    class="w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer {selectedIcon === item.name
+                      ? 'bg-sky-500/20 text-sky-600 dark:text-[#00c8ff] ring-2 ring-sky-500'
+                      : 'bg-slate-100 dark:bg-[#16161b] text-slate-600 dark:text-[#a1a1aa] hover:bg-slate-200 dark:hover:bg-[#202026]'}"
+                    title={item.name}
+                  >
+                    <item.icon size={14} weight={selectedIcon === item.name ? 'fill' : 'regular'} />
+                  </button>
+                {/each}
+              </div>
+            </div>
+
+            <!-- Color Palette -->
+            <div>
+              <span class="block text-[11px] font-semibold text-[#64748b] dark:text-[#a1a1aa] mb-1">
+                {t("colorLabel")}
+              </span>
+              <div class="flex items-center space-x-2">
+                {#each presetColors as col}
+                  <button
+                    type="button"
+                    onclick={() => (selectedColor = col)}
+                    class="w-6 h-6 rounded-full transition-transform cursor-pointer flex items-center justify-center {selectedColor === col ? 'scale-110 ring-2 ring-white/60 shadow-xs' : 'hover:scale-105'}"
+                    style="background-color: {col};"
+                  >
+                    {#if selectedColor === col}
+                      <CheckCircle size={12} weight="fill" class="text-white" />
+                    {/if}
+                  </button>
+                {/each}
+              </div>
+            </div>
+
             <!-- Custom Rounded Checkboxes with Icons -->
-            <div class="grid grid-cols-2 gap-2 pt-1">
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-[#e2e8f0] dark:border-[#1e1e24]">
               <CustomCheckbox bind:checked={savePlugins} label={t("savePluginsLabel")} icon={PuzzlePiece} />
               <CustomCheckbox bind:checked={saveShortcuts} label={t("saveShortcutsLabel")} icon={Keyboard} />
               <CustomCheckbox bind:checked={saveToolbars} label={t("saveToolbarsLabel")} icon={Toolbox} />
@@ -244,16 +307,11 @@
             </div>
           </div>
 
-          <div class="flex items-center justify-end space-x-2 pt-2 border-t border-[#e2e8f0] dark:border-[#1e1e24]">
-            <button
-              onclick={closeModal}
-              class="px-3 py-1.5 bg-[#f1f5f9] dark:bg-[#151518] hover:bg-[#e2e8f0] dark:hover:bg-[#202026] text-[#64748b] dark:text-[#a1a1aa] rounded-lg text-xs font-semibold cursor-pointer"
-            >
-              {t("cancelBtn")}
-            </button>
+          <div class="flex items-center justify-end pt-2 border-t border-[#e2e8f0] dark:border-[#1e1e24]">
             <button
               onclick={handleCreateProfileSubmit}
-              class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
+              disabled={!newProfileName.trim()}
+              class="w-full py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer disabled:opacity-40 transition-colors"
             >
               {t("createBtn")}
             </button>
@@ -532,6 +590,137 @@
             >
               {t("deleteBtn")}
             </button>
+          </div>
+        </div>
+
+      <!-- 7. View Profile Details Modal (Plugins + Custom Shortcuts Diff) -->
+      {:else if appStore.modal.type === "view_profile"}
+        <div class="p-4 flex flex-col h-[480px]">
+          <!-- Header -->
+          <div class="flex items-center justify-between pb-2.5 border-b border-[#e2e8f0] dark:border-[#1e1e24] shrink-0">
+            <div class="flex items-center space-x-2">
+              <Eye size={15} weight="bold" class="text-[#0284c7] dark:text-[#00c8ff]" />
+              <span class="text-xs font-bold text-[#0f172a] dark:text-[#fafafa]">Chi tiết hồ sơ</span>
+              <span class="text-[10px] text-[#64748b] dark:text-[#a1a1aa] bg-[#f1f5f9] dark:bg-[#151518] px-2 py-0.5 rounded border border-[#cbd5e1] dark:border-[#222228] font-mono">
+                {appStore.modal.profileName}
+              </span>
+            </div>
+            <button onclick={closeModal} class="text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0f172a] dark:hover:text-white cursor-pointer" title="Đóng">
+              <X size={14} weight="bold" />
+            </button>
+          </div>
+
+          <!-- Navigation Subtabs (Tiện ích & Phím tắt) + Search -->
+          <div class="flex items-center space-x-2 pt-2.5 pb-2 border-b border-[#e2e8f0] dark:border-[#1e1e24] shrink-0">
+            <button
+              type="button"
+              onclick={() => (viewTab = "plugins")}
+              class="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer {viewTab === 'plugins'
+                ? 'bg-sky-500/15 text-sky-600 dark:text-[#00c8ff] border border-sky-500/30'
+                : 'text-[#64748b] dark:text-[#a1a1aa] hover:bg-slate-100 dark:hover:bg-[#16161b]'}"
+            >
+              <PuzzlePiece size={12} weight="bold" />
+              <span>Tiện ích</span>
+              {#if profileDetails}
+                <span class="text-[10px] opacity-75">({profileDetails.plugins.length})</span>
+              {/if}
+            </button>
+
+            <button
+              type="button"
+              onclick={() => (viewTab = "shortcuts")}
+              class="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer {viewTab === 'shortcuts'
+                ? 'bg-sky-500/15 text-sky-600 dark:text-[#00c8ff] border border-sky-500/30'
+                : 'text-[#64748b] dark:text-[#a1a1aa] hover:bg-slate-100 dark:hover:bg-[#16161b]'}"
+            >
+              <Keyboard size={12} weight="bold" />
+              <span>Phím tắt</span>
+              {#if profileDetails}
+                <span class="text-[10px] opacity-75">({profileDetails.customShortcuts.length})</span>
+              {/if}
+            </button>
+
+            <!-- Search box -->
+            <div class="relative flex-1 ml-1">
+              <input
+                type="text"
+                bind:value={searchKeyword}
+                placeholder="Tìm kiếm..."
+                class="w-full bg-[#f8fafc] dark:bg-[#141417] border border-[#cbd5e1] dark:border-[#2b2b34] rounded-lg pl-6 pr-2 py-1 text-xs text-[#0f172a] dark:text-[#ffffff] focus:outline-none focus:border-[#00c8ff]"
+              />
+              <MagnifyingGlass size={11} class="absolute left-2 top-2 text-[#94a3b8]" />
+            </div>
+          </div>
+
+          <!-- Body Content Area -->
+          <div class="flex-1 overflow-y-auto py-2">
+            {#if isLoadingDetails}
+              <div class="h-full flex items-center justify-center text-xs text-[#64748b] dark:text-[#a1a1aa]">
+                Đang quét dữ liệu...
+              </div>
+            {:else if !profileDetails}
+              <div class="h-full flex items-center justify-center text-xs text-[#ef4444]">
+                Không tìm thấy dữ liệu hồ sơ.
+              </div>
+            {:else if viewTab === "plugins"}
+              <!-- Plugins List -->
+              {@const filteredPlugins = profileDetails.plugins.filter(p => p.name.toLowerCase().includes(searchKeyword.toLowerCase()) || p.filename.toLowerCase().includes(searchKeyword.toLowerCase()))}
+              {#if filteredPlugins.length === 0}
+                <div class="h-full flex flex-col items-center justify-center text-xs text-[#64748b] dark:text-[#a1a1aa] space-y-1">
+                  <span>Trống</span>
+                  <span class="text-[10px]">Không có tiện ích nào phù hợp</span>
+                </div>
+              {:else}
+                <div class="grid grid-cols-2 gap-1.5">
+                  {#each filteredPlugins as p}
+                    <div class="flex items-center justify-between p-2 rounded-lg bg-[#f8fafc] dark:bg-[#121216] border border-[#e2e8f0] dark:border-[#1e1e24]">
+                      <div class="flex items-center space-x-1.5 truncate">
+                        <PuzzlePiece size={12} weight="bold" class="text-sky-600 dark:text-[#00c8ff] shrink-0" />
+                        <span class="text-xs font-semibold truncate text-[#0f172a] dark:text-[#fafafa]">{p.name}</span>
+                      </div>
+                      {#if p.isExcluded}
+                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0 font-medium">
+                          Ngoại lệ
+                        </span>
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            {:else if viewTab === "shortcuts"}
+              <!-- Shortcuts List -->
+              {@const filteredShortcuts = profileDetails.customShortcuts.filter(s => s.command.toLowerCase().includes(searchKeyword.toLowerCase()) || s.keyDisplay.toLowerCase().includes(searchKeyword.toLowerCase()))}
+              {#if filteredShortcuts.length === 0}
+                <div class="h-full flex flex-col items-center justify-center text-xs text-[#64748b] dark:text-[#a1a1aa] space-y-1">
+                  <span>Trống</span>
+                  <span class="text-[10px]">Không có phím tắt tùy chỉnh nào khác bản gốc</span>
+                </div>
+              {:else}
+                <div class="space-y-1.5">
+                  {#each filteredShortcuts as s}
+                    <div class="flex items-center justify-between p-2 rounded-lg bg-[#f8fafc] dark:bg-[#121216] border border-[#e2e8f0] dark:border-[#1e1e24]">
+                      <div class="flex items-center space-x-2 truncate flex-1 mr-2">
+                        <span class="px-2 py-0.5 rounded bg-sky-500/15 text-sky-600 dark:text-[#00c8ff] font-mono font-bold text-[10px] border border-sky-500/30 shrink-0">
+                          {s.keyDisplay}
+                        </span>
+                        <span class="text-xs text-[#0f172a] dark:text-[#e4e4e7] truncate" title={s.command}>
+                          {s.command}
+                        </span>
+                      </div>
+                      {#if s.originalKey}
+                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shrink-0 font-medium">
+                          Đổi phím (Gốc: {s.originalKey})
+                        </span>
+                      {:else}
+                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0 font-medium">
+                          Thêm mới
+                        </span>
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            {/if}
           </div>
         </div>
       {/if}

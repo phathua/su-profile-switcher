@@ -109,7 +109,7 @@ pub fn open_save_dialog(app: &AppHandle) {
             WebviewUrl::App("index.html?mode=save".into()),
         )
         .title("Lưu hồ sơ")
-        .inner_size(360.0, 310.0)
+        .inner_size(380.0, 480.0)
         .resizable(false)
         .decorations(false)
         .center()

@@ -31,6 +31,10 @@
       initAppStore();
     });
 
+    const unlistenProfiles = listen("profiles-updated", () => {
+      initAppStore();
+    });
+
     const unlistenSave = listen("trigger-save-profile", () => {
       appStore.modal = { type: "create_profile" };
     });
@@ -52,6 +56,7 @@
       unlistenSwitched.then((f) => f());
       unlistenVer.then((f) => f());
       unlistenSettings.then((f) => f());
+      unlistenProfiles.then((f) => f());
       unlistenSave.then((f) => f());
       unlistenConfirmSwitch.then((f) => f());
       clearInterval(interval);

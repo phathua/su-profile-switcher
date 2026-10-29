@@ -164,3 +164,36 @@ pub struct ProfileItem {
     #[serde(rename = "isActive")]
     pub is_active: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginItem {
+    pub name: String,
+    pub filename: String,
+    #[serde(rename = "isExcluded")]
+    pub is_excluded: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShortcutItem {
+    pub raw: String,
+    #[serde(rename = "keyDisplay")]
+    pub key_display: String,
+    pub command: String,
+    #[serde(rename = "isCustom")]
+    pub is_custom: bool,
+    #[serde(rename = "originalKey")]
+    pub original_key: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileDetails {
+    #[serde(rename = "profileName")]
+    pub profile_name: String,
+    pub plugins: Vec<PluginItem>,
+    #[serde(rename = "customShortcuts")]
+    pub custom_shortcuts: Vec<ShortcutItem>,
+    #[serde(rename = "totalShortcutsCount")]
+    pub total_shortcuts_count: usize,
+    #[serde(rename = "defaultShortcutsCount")]
+    pub default_shortcuts_count: usize,
+}

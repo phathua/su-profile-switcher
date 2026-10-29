@@ -223,8 +223,22 @@ export async function saveProfile(name, savePlugins, saveShortcuts) {
   }
 }
 
-export async function saveProfileCustom(name, savePlugins, saveShortcuts, saveToolbars, saveMaterials, saveTemplates) {
-  const ver = appStore.state.selectedVersion;
+export async function saveProfileCustom(
+  name,
+  savePlugins,
+  saveShortcuts,
+  saveToolbars,
+  saveMaterials,
+  saveTemplates,
+  icon = null,
+  color = null
+) {
+  let ver = appStore.state.selectedVersion;
+  if (!ver) {
+    const s = await invoke("get_app_state");
+    appStore.state = s;
+    ver = s.selectedVersion;
+  }
   if (!ver) return;
   setBusy(true, `Đang lưu hồ sơ '${name}'...`);
   try {
@@ -236,6 +250,8 @@ export async function saveProfileCustom(name, savePlugins, saveShortcuts, saveTo
       saveToolbars,
       saveMaterials,
       saveTemplates,
+      icon,
+      color,
     });
     appStore.state = s;
     await loadProfileComponents();
@@ -244,6 +260,25 @@ export async function saveProfileCustom(name, savePlugins, saveShortcuts, saveTo
     alert(String(e));
   } finally {
     setBusy(false);
+  }
+}
+
+export async function getProfileDetails(profileName) {
+  let ver = appStore.state.selectedVersion;
+  if (!ver) {
+    const s = await invoke("get_app_state");
+    appStore.state = s;
+    ver = s.selectedVersion;
+  }
+  if (!ver) return null;
+  try {
+    return await invoke("get_profile_details", {
+      version: ver,
+      profileName,
+    });
+  } catch (e) {
+    console.error("Get profile details error:", e);
+    return null;
   }
 }
 

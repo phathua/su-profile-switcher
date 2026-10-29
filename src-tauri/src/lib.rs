@@ -37,6 +37,8 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(AppStateWrapper(Mutex::new(initial_state)))
         .setup(|app| {
+            #[cfg(windows)]
+            notification::ensure_aumid_registered();
             let _ = tray::setup_tray(app.handle());
             shortcuts::register_shortcuts(app.handle());
             Ok(())
@@ -70,6 +72,7 @@ pub fn run() {
             commands::analyze_import_source,
             commands::import_profile,
             commands::open_save_dialog,
+            commands::get_profile_details,
             commands::apply_update_and_restart
         ])
         .run(tauri::generate_context!())
@@ -117,6 +120,10 @@ fn handle_cli_args(args: &[String]) -> bool {
         } else if arg.eq_ignore_ascii_case("--shortcuts") && i + 1 < args.len() {
             save_shortcuts = args[i + 1].parse().unwrap_or(true);
             i += 2;
+        } else if arg.eq_ignore_ascii_case("--test-toast") {
+            notification::show_profile_switched_toast("Kiểm thử");
+            println!("Toast notification sent!");
+            return true;
         } else {
             i += 1;
         }

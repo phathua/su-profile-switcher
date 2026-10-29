@@ -53,8 +53,8 @@ jobs:
       - name: Auto Bump Version
         run: node scripts/bump-version.js
 
-      - name: Build Tauri App
-        run: pnpm tauri build --no-bundle --target ${{ matrix.target }}
+      - name: Build Tauri App (NSIS Bundle)
+        run: pnpm tauri build --target ${{ matrix.target }}
 
       - name: Package Artifacts
         id: package
@@ -63,7 +63,14 @@ jobs:
           $appVer = (Get-Content package.json | ConvertFrom-Json).version
           $outDir = "dist-release-${{ matrix.platform }}"
           New-Item -ItemType Directory -Path $outDir -Force
-          Copy-Item "src-tauri/target/${{ matrix.target }}/release/su-profile-switcher.exe" "$outDir/SuPS-${{ matrix.platform }}-v$appVer.exe"
+          $nsisExe = Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($nsisExe) {
+            Copy-Item $nsisExe.FullName "$outDir/SuPS-${{ matrix.platform }}-v$appVer-Setup.exe"
+            Copy-Item $nsisExe.FullName "SuPS-${{ matrix.platform }}-v$appVer-Setup.exe"
+            Write-Output "SETUP_NAME=SuPS-${{ matrix.platform }}-v$appVer-Setup.exe" >> $env:GITHUB_ENV
+          } else {
+            Copy-Item "src-tauri/target/${{ matrix.target }}/release/su-profile-switcher.exe" "$outDir/SuPS-${{ matrix.platform }}-v$appVer.exe"
+          }
           $zipName = "SuPS-${{ matrix.platform }}-v$appVer.zip"
           Compress-Archive -Path "$outDir/*" -DestinationPath $zipName
           Write-Output "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
@@ -75,7 +82,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SuPS-${{ matrix.platform }}
-          path: SuPS-${{ matrix.platform }}-*.zip
+          path: |
+            SuPS-${{ matrix.platform }}-*.exe
+            SuPS-${{ matrix.platform }}-*.zip
           if-no-files-found: error
 
   release:
@@ -137,6 +146,8 @@ jobs:
             *Bản phát hành tự động biên dịch đa kiến trúc (x64, x86 32-bit, arm64).*
           draft: false
           prerelease: false
-          files: release-artifacts/**/*.zip
+          files: |
+            release-artifacts/**/*.exe
+            release-artifacts/**/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
