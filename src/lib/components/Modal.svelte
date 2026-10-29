@@ -225,9 +225,9 @@
 
 {#if appStore.modal}
   <!-- Overlay Backdrop -->
-  <div class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+  <div class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-3">
     <!-- Modal Container -->
-    <div class="bg-[#ffffff] dark:bg-[#0a0a0d] border border-[#cbd5e1] dark:border-[#222228] rounded-xl shadow-2xl w-full {appStore.modal?.type === 'view_profile' ? 'max-w-xl' : 'max-w-sm'} overflow-hidden animate-in fade-in duration-100">
+    <div class="bg-[#ffffff] dark:bg-[#0a0a0d] border border-[#cbd5e1] dark:border-[#222228] rounded-xl shadow-2xl w-full {appStore.modal?.type === 'view_profile' ? 'max-w-[560px] max-h-[360px]' : 'max-w-[400px] max-h-[380px]'} overflow-hidden flex flex-col animate-in fade-in duration-100">
       
       <!-- 1. Create Profile Modal -->
       {#if appStore.modal.type === "create_profile" || appStore.modal.type === "save"}
@@ -595,9 +595,9 @@
 
       <!-- 7. View Profile Details Modal (Plugins + Custom Shortcuts Diff) -->
       {:else if appStore.modal.type === "view_profile"}
-        <div class="p-4 flex flex-col h-[480px]">
+        <div class="p-3.5 flex flex-col h-full max-h-[350px] overflow-hidden">
           <!-- Header -->
-          <div class="flex items-center justify-between pb-2.5 border-b border-[#e2e8f0] dark:border-[#1e1e24] shrink-0">
+          <div class="flex items-center justify-between pb-2 border-b border-[#e2e8f0] dark:border-[#1e1e24] shrink-0">
             <div class="flex items-center space-x-2">
               <Eye size={15} weight="bold" class="text-[#0284c7] dark:text-[#00c8ff]" />
               <span class="text-xs font-bold text-[#0f172a] dark:text-[#fafafa]">Chi tiết hồ sơ</span>
