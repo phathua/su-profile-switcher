@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-pub const APP_ID: &str = "com.opensource.suprofileswitcher";
+pub const APP_ID: &str = "com.ktplugin.suprofileswitcher";
 pub const APP_NAME: &str = "SketchUp Profile Switcher";
 
 fn clean_path(p: PathBuf) -> PathBuf {

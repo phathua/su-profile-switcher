@@ -158,12 +158,10 @@ pub fn apply_update_and_restart(app: &tauri::AppHandle, download_url: Option<&st
         format!(
             "@echo off\r\n\
             chcp 65001 > nul\r\n\
-            :wait_loop\r\n\
-            tasklist /fi \"PID eq {pid}\" | find \"{pid}\" > nul\r\n\
-            if %ERRORLEVEL% == 0 (\r\n\
-                timeout /t 1 /nobreak > nul\r\n\
-                goto wait_loop\r\n\
-            )\r\n\
+            taskkill /f /pid {pid} > nul 2>&1\r\n\
+            taskkill /f /im su-profile-switcher.exe > nul 2>&1\r\n\
+            taskkill /f /im \"SketchUp Profile Switcher.exe\" > nul 2>&1\r\n\
+            timeout /t 1 /nobreak > nul\r\n\
             start \"\" \"{installer}\"\r\n\
             del \"%~f0\"\r\n",
             pid = current_pid,
@@ -173,12 +171,10 @@ pub fn apply_update_and_restart(app: &tauri::AppHandle, download_url: Option<&st
         format!(
             "@echo off\r\n\
             chcp 65001 > nul\r\n\
-            :wait_loop\r\n\
-            tasklist /fi \"PID eq {pid}\" | find \"{pid}\" > nul\r\n\
-            if %ERRORLEVEL% == 0 (\r\n\
-                timeout /t 1 /nobreak > nul\r\n\
-                goto wait_loop\r\n\
-            )\r\n\
+            taskkill /f /pid {pid} > nul 2>&1\r\n\
+            taskkill /f /im su-profile-switcher.exe > nul 2>&1\r\n\
+            taskkill /f /im \"SketchUp Profile Switcher.exe\" > nul 2>&1\r\n\
+            timeout /t 1 /nobreak > nul\r\n\
             copy /y \"{new_exe}\" \"{current_exe}\" > nul\r\n\
             start \"\" \"{current_exe}\"\r\n\
             del \"%~f0\"\r\n",

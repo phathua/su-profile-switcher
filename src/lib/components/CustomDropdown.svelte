@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { CaretDown, Check } from "phosphor-svelte";
 
   let {
@@ -11,9 +11,35 @@
 
   let isOpen = $state(false);
   let dropdownRef = $state(null);
+  let popoverRef = $state(null);
+  let positionClass = $state("right-0 top-full mt-1.5");
 
-  function toggle() {
+  async function adjustPosition() {
+    await tick();
+    if (!dropdownRef || !popoverRef) return;
+    const btnRect = dropdownRef.getBoundingClientRect();
+    const popRect = popoverRef.getBoundingClientRect();
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+
+    let horizontal = "left-0";
+    if (btnRect.left + popRect.width > windowWidth - 10) {
+      horizontal = "right-0";
+    }
+
+    let vertical = "top-full mt-1.5";
+    if (btnRect.bottom + popRect.height > windowHeight - 10 && btnRect.top > popRect.height + 10) {
+      vertical = "bottom-full mb-1.5";
+    }
+
+    positionClass = `${horizontal} ${vertical}`;
+  }
+
+  async function toggle() {
     isOpen = !isOpen;
+    if (isOpen) {
+      await adjustPosition();
+    }
   }
 
   function selectOption(val) {
@@ -29,8 +55,10 @@
 
   onMount(() => {
     document.addEventListener("click", handleOutsideClick);
+    window.addEventListener("resize", adjustPosition);
     return () => {
       document.removeEventListener("click", handleOutsideClick);
+      window.removeEventListener("resize", adjustPosition);
     };
   });
 </script>
@@ -46,10 +74,11 @@
     <CaretDown size={11} weight="bold" class="text-slate-400 dark:text-[#a1a1aa] shrink-0 transition-transform duration-200 {isOpen ? 'rotate-180' : ''}" />
   </button>
 
-  <!-- Dropdown Popover (High z-index to never get clipped) -->
+  <!-- Dropdown Popover (Self-positioning against all viewport boundaries) -->
   {#if isOpen}
     <div
-      class="absolute left-0 mt-1.5 min-w-[160px] w-max bg-white dark:bg-[#0c0c0e] border border-slate-200 dark:border-[#2b2b34] rounded-lg shadow-2xl p-1 z-[999] animate-in fade-in zoom-in-95 duration-100"
+      bind:this={popoverRef}
+      class="absolute {positionClass} min-w-[160px] w-max max-w-[calc(100vw-20px)] bg-white dark:bg-[#0c0c0e] border border-slate-200 dark:border-[#2b2b34] rounded-lg shadow-2xl p-1 z-[999] animate-in fade-in zoom-in-95 duration-100"
     >
       <div class="max-h-48 overflow-y-auto space-y-0.5">
         {#each options as opt}
