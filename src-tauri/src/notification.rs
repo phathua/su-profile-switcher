@@ -43,11 +43,11 @@ pub fn resolve_app_icon_path() -> PathBuf {
 
     // 2. Tự động trích xuất icon vào AppData nếu chưa tồn tại
     let target_dir = if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        PathBuf::from(local_app_data).join("su-profile-switcher")
+        PathBuf::from(local_app_data).join("SketchUp Profile Switcher")
     } else if let Ok(app_data) = std::env::var("APPDATA") {
-        PathBuf::from(app_data).join("su-profile-switcher")
+        PathBuf::from(app_data).join("SketchUp Profile Switcher")
     } else {
-        std::env::temp_dir().join("su-profile-switcher")
+        std::env::temp_dir().join("SketchUp Profile Switcher")
     };
 
     let _ = std::fs::create_dir_all(&target_dir);

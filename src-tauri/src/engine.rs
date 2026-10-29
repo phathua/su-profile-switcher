@@ -12,9 +12,21 @@ use crate::process;
 
 pub fn get_app_storage_dir() -> PathBuf {
     let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
-    let dir = Path::new(&appdata).join("su-profile-switcher");
-    let _ = fs::create_dir_all(&dir);
-    dir
+    let new_dir = Path::new(&appdata).join("SketchUp Profile Switcher");
+    let old_dir = Path::new(&appdata).join("su-profile-switcher");
+
+    // Migration logic: If old directory has app_state.json and new does not, copy it over
+    if old_dir.exists() && !new_dir.exists() {
+        let _ = fs::create_dir_all(&new_dir);
+        let old_state = old_dir.join("app_state.json");
+        if old_state.exists() {
+            let _ = fs::copy(&old_state, new_dir.join("app_state.json"));
+        }
+    } else {
+        let _ = fs::create_dir_all(&new_dir);
+    }
+
+    new_dir
 }
 
 pub fn get_state_file_path() -> PathBuf {

@@ -209,14 +209,13 @@
     const info = appStore.modal.info;
     downloadingUpdate = true;
     try {
-      await invoke("download_update", {
-        url: info.downloadUrl,
+      await invoke("apply_update_and_restart", {
+        downloadUrl: info.downloadUrl || null,
         latestVersion: info.latestVersion,
+        restartOnFinish: false,
       });
-      alert("Đã tải bản cập nhật ngầm!");
     } catch (e) {
-      alert("Lỗi tải: " + String(e));
-    } finally {
+      alert("Lỗi tải cập nhật ngầm: " + String(e));
       downloadingUpdate = false;
       closeModal();
     }

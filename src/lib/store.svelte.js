@@ -356,13 +356,14 @@ export async function checkForUpdates(silent = false) {
   return null;
 }
 
-export async function applyUpdateAndRestart() {
+export async function applyUpdateAndRestart(restartOnFinish = true) {
   if (!appStore.updateInfo || !appStore.updateInfo.hasUpdate) return;
-  setBusy(true, "Đang tải bản cập nhật và tự khởi động lại...");
+  setBusy(true, restartOnFinish ? "Đang tải bản cập nhật và tự khởi động lại..." : "Đang tải bản cập nhật trong nền...");
   try {
     await invoke("apply_update_and_restart", {
       downloadUrl: appStore.updateInfo.downloadUrl || null,
       latestVersion: appStore.updateInfo.latestVersion,
+      restartOnFinish,
     });
   } catch (e) {
     alert("Lỗi cập nhật: " + String(e));

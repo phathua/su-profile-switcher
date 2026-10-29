@@ -198,7 +198,7 @@
   <!-- Info & Check Updates Footer -->
   <div class="pt-2 border-t border-slate-200 dark:border-[#1a1a20] flex items-center justify-between mt-auto">
     <div class="text-[11px] text-slate-500 dark:text-[#71717a] font-medium">
-      su-profile-switcher • v{APP_VERSION}
+      SketchUp Profile Switcher • v{APP_VERSION}
     </div>
     <button
       onclick={handleCheckUpdateNow}

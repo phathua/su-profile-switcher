@@ -21,7 +21,7 @@ pub fn check_for_updates(simulate: Option<&str>) -> UpdateInfo {
     // Call GitHub Releases API
     let url = "https://api.github.com/repos/phathua/su-profile-switcher/releases/latest";
     let resp = ureq::get(url)
-        .set("User-Agent", "su-profile-switcher-tauri")
+        .set("User-Agent", "SketchUp-Profile-Switcher")
         .timeout(std::time::Duration::from_secs(10))
         .call();
 
@@ -89,7 +89,7 @@ pub fn check_for_updates(simulate: Option<&str>) -> UpdateInfo {
 }
 
 pub fn download_update(url: &str, latest_version: &str) -> Result<PathBuf, String> {
-    let temp_dir = std::env::temp_dir().join("su-profile-switcher-update");
+    let temp_dir = std::env::temp_dir().join("SketchUp-Profile-Switcher-Update");
     let _ = fs::create_dir_all(&temp_dir);
     let ext = if url.to_lowercase().ends_with(".exe") { "exe" } else { "zip" };
     let dest = temp_dir.join(format!("update_{}.{}", latest_version, ext));
@@ -110,9 +110,14 @@ pub fn download_update(url: &str, latest_version: &str) -> Result<PathBuf, Strin
     Ok(dest)
 }
 
-pub fn apply_update_and_restart(app: &tauri::AppHandle, download_url: Option<&str>, latest_version: &str) -> Result<(), String> {
+pub fn apply_update_and_restart(
+    app: &tauri::AppHandle,
+    download_url: Option<&str>,
+    latest_version: &str,
+    restart_on_finish: bool,
+) -> Result<(), String> {
     let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let temp_dir = std::env::temp_dir().join("su-profile-switcher-update");
+    let temp_dir = std::env::temp_dir().join("SketchUp-Profile-Switcher-Update");
     let _ = fs::create_dir_all(&temp_dir);
 
     let downloaded_file = if let Some(url) = download_url.filter(|u| !u.is_empty()) {
@@ -155,33 +160,68 @@ pub fn apply_update_and_restart(app: &tauri::AppHandle, download_url: Option<&st
     let current_pid = std::process::id();
     let bat_path = temp_dir.join("apply_update.bat");
     let bat_content = if is_installer {
-        format!(
-            "@echo off\r\n\
-            chcp 65001 > nul\r\n\
-            taskkill /f /pid {pid} > nul 2>&1\r\n\
-            taskkill /f /im su-profile-switcher.exe > nul 2>&1\r\n\
-            taskkill /f /im \"SketchUp Profile Switcher.exe\" > nul 2>&1\r\n\
-            timeout /t 1 /nobreak > nul\r\n\
-            start \"\" \"{installer}\"\r\n\
-            del \"%~f0\"\r\n",
-            pid = current_pid,
-            installer = new_exe.to_string_lossy()
-        )
+        if restart_on_finish {
+            // Cài đặt im lặng (/S) và khởi động lại ứng dụng mới sau khi cài đặt xong
+            format!(
+                "@echo off\r\n\
+                chcp 65001 > nul\r\n\
+                taskkill /f /pid {pid} > nul 2>&1\r\n\
+                taskkill /f /im su-profile-switcher.exe > nul 2>&1\r\n\
+                taskkill /f /im \"SketchUp Profile Switcher.exe\" > nul 2>&1\r\n\
+                timeout /t 1 /nobreak > nul\r\n\
+                start /wait \"\" \"{installer}\" /S\r\n\
+                start \"\" \"{current_exe}\"\r\n\
+                del \"%~f0\"\r\n",
+                pid = current_pid,
+                installer = new_exe.to_string_lossy(),
+                current_exe = current_exe.to_string_lossy()
+            )
+        } else {
+            // Cập nhật ngầm trong nền: chỉ cài đè im lặng (/S), không tự khởi động lại làm phiền người dùng
+            format!(
+                "@echo off\r\n\
+                chcp 65001 > nul\r\n\
+                taskkill /f /pid {pid} > nul 2>&1\r\n\
+                taskkill /f /im su-profile-switcher.exe > nul 2>&1\r\n\
+                taskkill /f /im \"SketchUp Profile Switcher.exe\" > nul 2>&1\r\n\
+                timeout /t 1 /nobreak > nul\r\n\
+                start \"\" \"{installer}\" /S\r\n\
+                del \"%~f0\"\r\n",
+                pid = current_pid,
+                installer = new_exe.to_string_lossy()
+            )
+        }
     } else {
-        format!(
-            "@echo off\r\n\
-            chcp 65001 > nul\r\n\
-            taskkill /f /pid {pid} > nul 2>&1\r\n\
-            taskkill /f /im su-profile-switcher.exe > nul 2>&1\r\n\
-            taskkill /f /im \"SketchUp Profile Switcher.exe\" > nul 2>&1\r\n\
-            timeout /t 1 /nobreak > nul\r\n\
-            copy /y \"{new_exe}\" \"{current_exe}\" > nul\r\n\
-            start \"\" \"{current_exe}\"\r\n\
-            del \"%~f0\"\r\n",
-            pid = current_pid,
-            new_exe = new_exe.to_string_lossy(),
-            current_exe = current_exe.to_string_lossy()
-        )
+        if restart_on_finish {
+            format!(
+                "@echo off\r\n\
+                chcp 65001 > nul\r\n\
+                taskkill /f /pid {pid} > nul 2>&1\r\n\
+                taskkill /f /im su-profile-switcher.exe > nul 2>&1\r\n\
+                taskkill /f /im \"SketchUp Profile Switcher.exe\" > nul 2>&1\r\n\
+                timeout /t 1 /nobreak > nul\r\n\
+                copy /y \"{new_exe}\" \"{current_exe}\" > nul\r\n\
+                start \"\" \"{current_exe}\"\r\n\
+                del \"%~f0\"\r\n",
+                pid = current_pid,
+                new_exe = new_exe.to_string_lossy(),
+                current_exe = current_exe.to_string_lossy()
+            )
+        } else {
+            format!(
+                "@echo off\r\n\
+                chcp 65001 > nul\r\n\
+                taskkill /f /pid {pid} > nul 2>&1\r\n\
+                taskkill /f /im su-profile-switcher.exe > nul 2>&1\r\n\
+                taskkill /f /im \"SketchUp Profile Switcher.exe\" > nul 2>&1\r\n\
+                timeout /t 1 /nobreak > nul\r\n\
+                copy /y \"{new_exe}\" \"{current_exe}\" > nul\r\n\
+                del \"%~f0\"\r\n",
+                pid = current_pid,
+                new_exe = new_exe.to_string_lossy(),
+                current_exe = current_exe.to_string_lossy()
+            )
+        }
     };
 
     fs::write(&bat_path, bat_content).map_err(|e| e.to_string())?;

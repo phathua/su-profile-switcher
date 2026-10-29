@@ -138,8 +138,14 @@ pub fn apply_update_and_restart(
     app: tauri::AppHandle,
     download_url: Option<String>,
     latest_version: String,
+    restart_on_finish: Option<bool>,
 ) -> Result<(), String> {
-    updater::apply_update_and_restart(&app, download_url.as_deref(), &latest_version)
+    updater::apply_update_and_restart(
+        &app,
+        download_url.as_deref(),
+        &latest_version,
+        restart_on_finish.unwrap_or(true),
+    )
 }
 
 #[tauri::command]

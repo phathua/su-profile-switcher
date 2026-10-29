@@ -35,7 +35,7 @@
     <!-- Update Action (Pill when update available, sleek icon when normal) -->
     {#if appStore.updateInfo && appStore.updateInfo.hasUpdate}
       <button
-        onclick={applyUpdateAndRestart}
+        onclick={() => applyUpdateAndRestart(true)}
         class="flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold shadow-xs transition-all cursor-pointer mr-1 animate-pulse"
         title="Có bản mới v{appStore.updateInfo.latestVersion}. Bấm để tải và tự khởi động lại."
       >
