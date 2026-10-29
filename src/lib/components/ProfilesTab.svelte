@@ -100,9 +100,9 @@
   }
 </script>
 
-<div class="space-y-2">
+<div class="flex flex-col flex-1 h-full space-y-2 overflow-hidden">
   <!-- Top Combined Action Bar (Active profile info + Launch & Add actions) -->
-  <div class="flex items-center justify-between bg-[#ffffff] dark:bg-[#0c0c0e] p-2 rounded-lg border border-[#e2e8f0] dark:border-[#1e1e24]">
+  <div class="flex items-center justify-between bg-[#ffffff] dark:bg-[#0c0c0e] p-2 rounded-lg border border-[#e2e8f0] dark:border-[#1e1e24] shrink-0">
     <!-- Left: Active Profile Info & Count -->
     <div class="flex items-center space-x-2">
       <div class="w-7 h-7 rounded-lg bg-sky-500/15 flex items-center justify-center text-sky-600 dark:text-[#00c8ff]">
@@ -150,9 +150,9 @@
     </div>
   </div>
 
-  <!-- Profiles List Container (Expanded height to 220px) -->
-  <div class="bg-[#ffffff] dark:bg-[#0a0a0c] border border-[#e2e8f0] dark:border-[#1e1e24] rounded-lg overflow-hidden">
-    <div class="max-h-[220px] overflow-y-auto divide-y divide-[#e2e8f0] dark:divide-[#1a1a20]">
+  <!-- Profiles List Container (Flex-1 expands dynamically with window height) -->
+  <div class="flex-1 bg-[#ffffff] dark:bg-[#0a0a0c] border border-[#e2e8f0] dark:border-[#1e1e24] rounded-lg overflow-hidden flex flex-col min-h-0">
+    <div class="flex-1 overflow-y-auto divide-y divide-[#e2e8f0] dark:divide-[#1a1a20]">
       {#each profilesList as profile}
         {@const isActive = profile === activeProfile}
         {@const comp = getComponentsFor(profile)}

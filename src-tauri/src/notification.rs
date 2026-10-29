@@ -3,12 +3,16 @@ use std::path::PathBuf;
 pub const APP_ID: &str = "com.ktplugin.suprofileswitcher";
 pub const APP_NAME: &str = "SketchUp Profile Switcher";
 
+const APP_ICON_PNG: &[u8] = include_bytes!("../icons/128x128.png");
+const APP_ICON_ICO: &[u8] = include_bytes!("../icons/icon.ico");
+
 fn clean_path(p: PathBuf) -> PathBuf {
     let s = p.to_string_lossy().replace(r"\\?\", "");
     PathBuf::from(s)
 }
 
 pub fn resolve_app_icon_path() -> PathBuf {
+    // 1. Kiểm tra file ảnh cạnh binary hoặc thư mục dev
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
             let p1 = parent.join("icons").join("128x128.png");
@@ -19,6 +23,8 @@ pub fn resolve_app_icon_path() -> PathBuf {
             if p3.exists() { return clean_path(p3); }
             let p4 = parent.join("icon.ico");
             if p4.exists() { return clean_path(p4); }
+            let p5 = parent.join("app-icon.png");
+            if p5.exists() { return clean_path(p5); }
         }
     }
 
@@ -35,7 +41,30 @@ pub fn resolve_app_icon_path() -> PathBuf {
         }
     }
 
-    clean_path(std::env::current_exe().unwrap_or_default())
+    // 2. Tự động trích xuất icon vào AppData nếu chưa tồn tại
+    let target_dir = if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        PathBuf::from(local_app_data).join("su-profile-switcher")
+    } else if let Ok(app_data) = std::env::var("APPDATA") {
+        PathBuf::from(app_data).join("su-profile-switcher")
+    } else {
+        std::env::temp_dir().join("su-profile-switcher")
+    };
+
+    let _ = std::fs::create_dir_all(&target_dir);
+    let target_png = target_dir.join("app-icon.png");
+    if !target_png.exists() || std::fs::metadata(&target_png).map(|m| m.len()).unwrap_or(0) == 0 {
+        let _ = std::fs::write(&target_png, APP_ICON_PNG);
+    }
+    let target_ico = target_dir.join("app-icon.ico");
+    if !target_ico.exists() || std::fs::metadata(&target_ico).map(|m| m.len()).unwrap_or(0) == 0 {
+        let _ = std::fs::write(&target_ico, APP_ICON_ICO);
+    }
+
+    if target_png.exists() {
+        clean_path(target_png)
+    } else {
+        PathBuf::new()
+    }
 }
 
 #[cfg(windows)]
@@ -47,7 +76,13 @@ pub fn ensure_aumid_registered() {
     }
 
     let icon_path = resolve_app_icon_path();
-    let icon_str = icon_path.to_string_lossy();
+    let ico_candidate = icon_path.with_extension("ico");
+    let reg_icon = if ico_candidate.exists() {
+        ico_candidate
+    } else {
+        icon_path.clone()
+    };
+    let icon_str = reg_icon.to_string_lossy();
     let base_key = format!(r#"HKCU\Software\Classes\AppUserModelId\{}"#, APP_ID);
 
     use std::os::windows::process::CommandExt;
@@ -69,6 +104,13 @@ pub fn ensure_aumid_registered() {
         .args(&["add", &base_key, "/v", "ShowInSettings", "/t", "REG_DWORD", "/d", "1", "/f"])
         .creation_flags(CREATE_NO_WINDOW)
         .output();
+
+    // Dọn dẹp key com.opensource cũ nếu còn tồn tại trong Registry
+    let old_key = r#"HKCU\Software\Classes\AppUserModelId\com.opensource.suprofileswitcher"#;
+    let _ = std::process::Command::new("reg")
+        .args(&["delete", old_key, "/f"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
 }
 
 pub fn show_profile_switched_toast(profile_name: &str) {
@@ -76,7 +118,10 @@ pub fn show_profile_switched_toast(profile_name: &str) {
     {
         ensure_aumid_registered();
         let icon_path = resolve_app_icon_path();
-        let icon_uri = if icon_path.exists() {
+        let is_image = icon_path
+            .extension()
+            .map_or(false, |ext| ext.eq_ignore_ascii_case("png") || ext.eq_ignore_ascii_case("jpg"));
+        let icon_uri = if icon_path.exists() && is_image {
             format!("file:///{}", icon_path.to_string_lossy().replace('\\', "/"))
         } else {
             String::new()
@@ -116,5 +161,40 @@ pub fn show_profile_switched_toast(profile_name: &str) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_app_icon_path() {
+        let p = resolve_app_icon_path();
+        assert!(p.exists(), "Resolved icon path must exist on disk: {:?}", p);
+        let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("");
+        assert!(ext == "png" || ext == "ico", "Icon must be png or ico, got: {}", ext);
+        assert_ne!(ext, "exe", "Icon must NEVER be an executable binary!");
+    }
+
+    #[test]
+    fn test_ensure_aumid_registered() {
+        ensure_aumid_registered();
+        let base_key = format!(r#"HKCU\Software\Classes\AppUserModelId\{}"#, APP_ID);
+        let out = std::process::Command::new("reg")
+            .args(&["query", &base_key, "/v", "IconUri"])
+            .output()
+            .expect("failed to run reg query");
+        assert!(out.status.success());
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(!stdout.contains(".exe"), "Registry IconUri must not be .exe: {}", stdout);
+        assert!(stdout.contains(".ico") || stdout.contains(".png"), "Registry IconUri must be .ico or .png: {}", stdout);
+
+        let old_key = r#"HKCU\Software\Classes\AppUserModelId\com.opensource.suprofileswitcher"#;
+        let out_old = std::process::Command::new("reg")
+            .args(&["query", old_key])
+            .output()
+            .expect("failed to run reg query");
+        assert!(!out_old.status.success(), "Old registry key should be deleted");
     }
 }

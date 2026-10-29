@@ -85,8 +85,8 @@
       </div>
     </div>
 
-    <!-- Tab Content (Compact Modal Body, fits without scrollbar) -->
-    <div class="flex-1 p-3 overflow-hidden bg-[#f8fafc] dark:bg-[#000000]">
+    <!-- Tab Content (Flex-1 to dynamically expand on window resize) -->
+    <div class="flex-1 p-3 overflow-hidden flex flex-col bg-[#f8fafc] dark:bg-[#000000]">
       {#if appStore.activeTab === "profiles"}
         <ProfilesTab />
       {:else if appStore.activeTab === "backup"}
