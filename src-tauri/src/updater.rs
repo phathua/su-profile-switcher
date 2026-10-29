@@ -19,7 +19,7 @@ pub fn check_for_updates(simulate: Option<&str>) -> UpdateInfo {
     }
 
     // Call GitHub Releases API
-    let url = "https://api.github.com/repos/OpenSource/su-profile-switcher/releases/latest";
+    let url = "https://api.github.com/repos/phathua/su-profile-switcher/releases/latest";
     let resp = ureq::get(url)
         .set("User-Agent", "su-profile-switcher-tauri")
         .timeout(std::time::Duration::from_secs(10))
@@ -36,11 +36,24 @@ pub fn check_for_updates(simulate: Option<&str>) -> UpdateInfo {
 
             let mut dl_url = String::new();
             if let Some(assets) = val["assets"].as_array() {
+                let target_arch = get_current_arch();
+                // 1. Try to find the exact architecture match (e.g., SuPS-x64-*.zip, SuPS-arm64-*.zip, SuPS-x86-*.zip)
                 for asset in assets {
-                    let name = asset["name"].as_str().unwrap_or("");
-                    if name.contains("windows") || name.ends_with(".zip") || name.ends_with(".exe") {
+                    let name = asset["name"].as_str().unwrap_or("").to_lowercase();
+                    if name.contains(&target_arch) && (name.ends_with(".zip") || name.ends_with(".exe")) {
                         dl_url = asset["browser_download_url"].as_str().unwrap_or("").to_string();
                         break;
+                    }
+                }
+
+                // 2. Fallback to any windows zip or exe if specific arch asset is not found
+                if dl_url.is_empty() {
+                    for asset in assets {
+                        let name = asset["name"].as_str().unwrap_or("").to_lowercase();
+                        if name.ends_with(".zip") || name.ends_with(".exe") {
+                            dl_url = asset["browser_download_url"].as_str().unwrap_or("").to_string();
+                            break;
+                        }
                     }
                 }
             }
@@ -170,4 +183,27 @@ fn is_newer(latest: &str, current: &str) -> bool {
     let c = parse_version(current);
 
     l > c
+}
+
+pub fn get_current_arch() -> String {
+    #[cfg(target_arch = "x86_64")]
+    {
+        "x64".to_string()
+    }
+    #[cfg(target_arch = "x86")]
+    {
+        "x86".to_string()
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        "arm64".to_string()
+    }
+    #[cfg(target_arch = "arm")]
+    {
+        "arm".to_string()
+    }
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64", target_arch = "arm")))]
+    {
+        std::env::consts::ARCH.to_string()
+    }
 }
