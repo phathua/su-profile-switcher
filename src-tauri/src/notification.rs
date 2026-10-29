@@ -75,19 +75,46 @@ pub fn show_profile_switched_toast(profile_name: &str) {
     #[cfg(windows)]
     {
         ensure_aumid_registered();
-        use winrt_notification::{Toast, Duration, IconCrop};
         let icon_path = resolve_app_icon_path();
+        let icon_uri = if icon_path.exists() {
+            format!("file:///{}", icon_path.to_string_lossy().replace('\\', "/"))
+        } else {
+            String::new()
+        };
 
-        let mut toast = Toast::new(APP_ID);
-        toast = toast
-            .title(APP_NAME)
-            .text1(&format!("Đã chuyển sang hồ sơ '{}' thành công!", profile_name))
-            .duration(Duration::Short);
+        let image_xml = if !icon_uri.is_empty() {
+            format!(r#"<image placement="appLogoOverride" hint-crop="circle" src="{}" alt="Logo"/>"#, icon_uri)
+        } else {
+            String::new()
+        };
 
-        if icon_path.exists() {
-            toast = toast.icon(&icon_path, IconCrop::Circular, APP_NAME);
+        let xml_payload = format!(
+            r#"<toast>
+                <visual>
+                    <binding template="ToastGeneric">
+                        <text id="1">{}</text>
+                        <text id="2">Đã chuyển sang hồ sơ '{}' thành công!</text>
+                        {}
+                    </binding>
+                </visual>
+            </toast>"#,
+            APP_NAME,
+            profile_name,
+            image_xml
+        );
+
+        use windows::core::HSTRING;
+        use windows::Data::Xml::Dom::XmlDocument;
+        use windows::UI::Notifications::{ToastNotification, ToastNotificationManager};
+
+        if let Ok(xml) = XmlDocument::new() {
+            if xml.LoadXml(&HSTRING::from(xml_payload)).is_ok() {
+                if let Ok(toast) = ToastNotification::CreateToastNotification(&xml) {
+                    if let Ok(notifier) = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_ID)) {
+                        let _ = notifier.Show(&toast);
+                    }
+                }
+            }
         }
-
-        let _ = toast.show();
     }
 }
