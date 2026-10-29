@@ -1,0 +1,36 @@
+## Build and output
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+Build/
+Publish/
+dist/
+dist-release*/
+release/
+*.zip
+node_modules/
+src-tauri/target/
+.pnpm-debug.log*
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## Visual Studio
+.vs/
+.vscode/
+
+## .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## Agent scratch & local runtime caches
+.agents/
+.agents/scratch/
+app_state.json
+*.log

@@ -1,0 +1,59 @@
+name: Build & Release Matrix
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.rid }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [ win-x64, win-x86, win-arm64 ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore SuProfileSwitcher.csproj -r ${{ matrix.rid }}
+
+      - name: Publish application
+        run: |
+          dotnet publish SuProfileSwitcher.csproj `
+            -c Release `
+            -r ${{ matrix.rid }} `
+            --self-contained false `
+            -p:PublishSingleFile=true `
+            -o dist/${{ matrix.rid }}
+
+      - name: Package zip archive
+        shell: pwsh
+        run: |
+          $ver = (git rev-list --count HEAD)
+          $zipName = "su-profile-switcher-v1.0.$ver-${{ matrix.rid }}.zip"
+          Compress-Archive -Path "dist/${{ matrix.rid }}/*" -DestinationPath $zipName
+          Write-Output "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: su-profile-switcher-${{ matrix.rid }}
+          path: dist/${{ matrix.rid }}/*
+          if-no-files-found: error
