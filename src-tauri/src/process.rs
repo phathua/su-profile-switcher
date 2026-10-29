@@ -36,24 +36,21 @@ pub fn close_sketchup_gracefully() -> bool {
 
 pub fn find_sketchup_exe(version_display: &str) -> Option<PathBuf> {
     let program_files = std::env::var("ProgramFiles").unwrap_or_else(|_| "C:\\Program Files".to_string());
-    
-    // Check direct version folder: C:\Program Files\SketchUp\SketchUp 2026\SketchUp.exe
-    let candidate1 = Path::new(&program_files)
-        .join("SketchUp")
-        .join(version_display)
-        .join("SketchUp.exe");
-    if candidate1.exists() {
-        return Some(candidate1);
-    }
-
-    // Check version number (e.g. 2026, 2025)
     let year = version_display.split_whitespace().last().unwrap_or(version_display);
-    let candidate2 = Path::new(&program_files)
-        .join("SketchUp")
-        .join(format!("SketchUp {}", year))
-        .join("SketchUp.exe");
-    if candidate2.exists() {
-        return Some(candidate2);
+
+    let candidates = [
+        // Trimble SketchUp 2024, 2025, 2026 subfolder layout:
+        Path::new(&program_files).join("SketchUp").join(version_display).join("SketchUp").join("SketchUp.exe"),
+        Path::new(&program_files).join("SketchUp").join(format!("SketchUp {}", year)).join("SketchUp").join("SketchUp.exe"),
+        // Direct version folder:
+        Path::new(&program_files).join("SketchUp").join(version_display).join("SketchUp.exe"),
+        Path::new(&program_files).join("SketchUp").join(format!("SketchUp {}", year)).join("SketchUp.exe"),
+    ];
+
+    for c in &candidates {
+        if c.exists() {
+            return Some(c.clone());
+        }
     }
 
     None

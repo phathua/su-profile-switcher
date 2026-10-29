@@ -35,6 +35,14 @@
       appStore.modal = { type: "create_profile" };
     });
 
+    const unlistenConfirmSwitch = listen("request-confirm-switch", (event) => {
+      const payload = event.payload;
+      appStore.modal = {
+        type: "confirm_switch",
+        targetProfile: payload.targetProfile,
+      };
+    });
+
     // Check SketchUp process every 3 seconds
     const interval = setInterval(() => {
       checkProcessStatus();
@@ -45,6 +53,7 @@
       unlistenVer.then((f) => f());
       unlistenSettings.then((f) => f());
       unlistenSave.then((f) => f());
+      unlistenConfirmSwitch.then((f) => f());
       clearInterval(interval);
     };
   });

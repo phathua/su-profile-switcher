@@ -3,6 +3,7 @@
     appStore,
     renameProfile,
     deleteProfile,
+    updateProfileMetadata,
     saveProfileCustom,
     switchProfile,
     t,
@@ -22,9 +23,46 @@
     Toolbox,
     Palette,
     FileText,
+    Folder,
+    Briefcase,
+    PaintBrush,
+    Cube,
+    Compass,
+    Lightning,
+    Star,
+    Sparkle,
+    Cpu,
+    GameController,
+    Command,
   } from "phosphor-svelte";
 
+  const availableIcons = [
+    { name: "Folder", icon: Folder },
+    { name: "Briefcase", icon: Briefcase },
+    { name: "PaintBrush", icon: PaintBrush },
+    { name: "Cube", icon: Cube },
+    { name: "Compass", icon: Compass },
+    { name: "Lightning", icon: Lightning },
+    { name: "Star", icon: Star },
+    { name: "Sparkle", icon: Sparkle },
+    { name: "Cpu", icon: Cpu },
+    { name: "GameController", icon: GameController },
+  ];
+
+  const presetColors = [
+    "#00c8ff",
+    "#10b981",
+    "#f59e0b",
+    "#ef4444",
+    "#a855f7",
+    "#64748b",
+  ];
+
   let renameValue = $state("");
+  let selectedIcon = $state("Folder");
+  let selectedColor = $state("#00c8ff");
+  let shortcutValue = $state("");
+  let isRecordingShortcut = $state(false);
   let newProfileName = $state("");
   let savePlugins = $state(true);
   let saveShortcuts = $state(true);
@@ -37,6 +75,13 @@
     if (appStore.modal) {
       if (appStore.modal.type === "rename") {
         renameValue = appStore.modal.oldName;
+        const curVer = appStore.state.selectedVersion;
+        const verCfg = appStore.state.versions[curVer] || {};
+        const meta = (verCfg.profilesMetadata && verCfg.profilesMetadata[appStore.modal.oldName]) || {};
+        selectedIcon = meta.icon || "Folder";
+        selectedColor = meta.color || "#00c8ff";
+        shortcutValue = meta.shortcut || "";
+        isRecordingShortcut = false;
       } else if (appStore.modal.type === "create_profile" || appStore.modal.type === "save") {
         const now = new Date();
         const mm = String(now.getMonth() + 1).padStart(2, "0");
@@ -59,8 +104,39 @@
 
   async function handleRenameSubmit() {
     if (!renameValue.trim()) return;
-    await renameProfile(appStore.modal.oldName, renameValue.trim());
+    const oldName = appStore.modal.oldName;
+    const newName = renameValue.trim();
+    if (oldName !== newName) {
+      await renameProfile(oldName, newName);
+    }
+    await updateProfileMetadata(
+      newName,
+      selectedIcon,
+      selectedColor,
+      shortcutValue.trim() || null
+    );
     closeModal();
+  }
+
+  function handleKeyDownShortcut(e) {
+    if (!isRecordingShortcut) return;
+    e.preventDefault();
+    if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+
+    let parts = [];
+    if (e.ctrlKey) parts.push("Ctrl");
+    if (e.altKey) parts.push("Alt");
+    if (e.shiftKey) parts.push("Shift");
+
+    let key = e.key.toUpperCase();
+    if (key === "ESCAPE") {
+      shortcutValue = "";
+      isRecordingShortcut = false;
+      return;
+    }
+    parts.push(key);
+    shortcutValue = parts.join("+");
+    isRecordingShortcut = false;
   }
 
   async function handleCreateProfileSubmit() {
@@ -184,29 +260,109 @@
           </div>
         </div>
 
-      <!-- 2. Rename Modal -->
+      <!-- 2. Customize Profile Modal (Rename + Icon + Color + Shortcut) -->
       {:else if appStore.modal.type === "rename"}
         <div class="p-4 space-y-3">
           <div class="flex items-center justify-between pb-2 border-b border-[#e2e8f0] dark:border-[#1e1e24]">
             <div class="flex items-center space-x-2">
               <PencilSimple size={15} weight="bold" class="text-[#0284c7] dark:text-[#00c8ff]" />
-              <span class="text-xs font-bold text-[#0f172a] dark:text-[#fafafa]">{t("renameHeading")}</span>
+              <span class="text-xs font-bold text-[#0f172a] dark:text-[#fafafa]">{t("editProfileHeading")}</span>
             </div>
             <button onclick={closeModal} class="text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0f172a] dark:hover:text-white cursor-pointer">
               <X size={14} weight="bold" />
             </button>
           </div>
 
-          <div>
-            <label class="block text-[11px] font-semibold text-[#64748b] dark:text-[#a1a1aa] mb-1" for="renameInput">
-              Tên hồ sơ mới:
-            </label>
-            <input
-              id="renameInput"
-              type="text"
-              bind:value={renameValue}
-              class="w-full bg-[#f8fafc] dark:bg-[#141417] border border-[#cbd5e1] dark:border-[#2b2b34] rounded-lg px-2.5 py-1.5 text-xs text-[#0f172a] dark:text-[#ffffff] focus:outline-none focus:border-[#00c8ff]"
-            />
+          <div class="space-y-2.5">
+            <div>
+              <label class="block text-[11px] font-semibold text-[#64748b] dark:text-[#a1a1aa] mb-1" for="renameInput">
+                {t("profileNameLabel")}
+              </label>
+              <input
+                id="renameInput"
+                type="text"
+                bind:value={renameValue}
+                class="w-full bg-[#f8fafc] dark:bg-[#141417] border border-[#cbd5e1] dark:border-[#2b2b34] rounded-lg px-2.5 py-1.5 text-xs text-[#0f172a] dark:text-[#ffffff] focus:outline-none focus:border-[#00c8ff]"
+              />
+            </div>
+
+            <!-- Icon Picker -->
+            <div>
+              <span class="block text-[11px] font-semibold text-[#64748b] dark:text-[#a1a1aa] mb-1">
+                {t("iconLabel")}
+              </span>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                {#each availableIcons as item}
+                  <button
+                    type="button"
+                    onclick={() => (selectedIcon = item.name)}
+                    class="w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer {selectedIcon === item.name
+                      ? 'bg-sky-500/20 text-sky-600 dark:text-[#00c8ff] ring-2 ring-sky-500'
+                      : 'bg-slate-100 dark:bg-[#16161b] text-slate-600 dark:text-[#a1a1aa] hover:bg-slate-200 dark:hover:bg-[#202026]'}"
+                    title={item.name}
+                  >
+                    <item.icon size={14} weight={selectedIcon === item.name ? 'fill' : 'regular'} />
+                  </button>
+                {/each}
+              </div>
+            </div>
+
+            <!-- Color Palette -->
+            <div>
+              <span class="block text-[11px] font-semibold text-[#64748b] dark:text-[#a1a1aa] mb-1">
+                {t("colorLabel")}
+              </span>
+              <div class="flex items-center space-x-2">
+                {#each presetColors as col}
+                  <button
+                    type="button"
+                    onclick={() => (selectedColor = col)}
+                    class="w-6 h-6 rounded-full transition-transform cursor-pointer flex items-center justify-center {selectedColor === col ? 'scale-110 ring-2 ring-white/60 shadow-xs' : 'hover:scale-105'}"
+                    style="background-color: {col};"
+                  >
+                    {#if selectedColor === col}
+                      <CheckCircle size={12} weight="fill" class="text-white" />
+                    {/if}
+                  </button>
+                {/each}
+              </div>
+            </div>
+
+            <!-- Shortcut Recorder -->
+            <div>
+              <label class="block text-[11px] font-semibold text-[#64748b] dark:text-[#a1a1aa] mb-1" for="shortcutBtn">
+                {t("shortcutLabel")}
+              </label>
+              <div class="flex items-center space-x-2">
+                <button
+                  id="shortcutBtn"
+                  type="button"
+                  onkeydown={handleKeyDownShortcut}
+                  onclick={() => (isRecordingShortcut = true)}
+                  class="flex-1 text-left px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-colors cursor-pointer {isRecordingShortcut
+                    ? 'border-sky-500 bg-sky-500/10 text-sky-600 dark:text-[#00c8ff] animate-pulse'
+                    : 'border-[#cbd5e1] dark:border-[#2b2b34] bg-[#f8fafc] dark:bg-[#141417] text-[#0f172a] dark:text-[#ffffff]'}"
+                >
+                  {#if isRecordingShortcut}
+                    Bấm tổ hợp phím (ví dụ: Ctrl+Alt+1)...
+                  {:else if shortcutValue}
+                    {shortcutValue}
+                  {:else}
+                    <span class="text-slate-400 dark:text-[#71717a] font-sans">Bấm để gán phím tắt</span>
+                  {/if}
+                </button>
+                {#if shortcutValue}
+                  <button
+                    type="button"
+                    onclick={() => (shortcutValue = "")}
+                    class="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"
+                    title="Xóa phím tắt"
+                  >
+                    <X size={13} weight="bold" />
+                  </button>
+                {/if}
+              </div>
+            </div>
           </div>
 
           <div class="flex items-center justify-end space-x-2 pt-2 border-t border-[#e2e8f0] dark:border-[#1e1e24]">
@@ -220,7 +376,7 @@
               onclick={handleRenameSubmit}
               class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
             >
-              {t("renameBtn")}
+              {t("saveEditBtn")}
             </button>
           </div>
         </div>
@@ -242,11 +398,21 @@
               onclick={closeModal}
               class="px-3 py-1.5 bg-[#f1f5f9] dark:bg-[#151518] hover:bg-[#e2e8f0] dark:hover:bg-[#202026] text-[#64748b] dark:text-[#a1a1aa] rounded-lg text-xs font-semibold cursor-pointer"
             >
-              {t("cancelBtn")}
+              {t("cancelSwitchBtn")}
+            </button>
+            <button
+              onclick={async () => {
+                const target = appStore.modal.targetProfile;
+                closeModal();
+                await switchProfile(target);
+              }}
+              class="px-3 py-1.5 bg-slate-200 dark:bg-[#1f1f26] hover:bg-slate-300 dark:hover:bg-[#282832] text-slate-800 dark:text-slate-200 rounded-lg text-xs font-bold cursor-pointer"
+            >
+              {t("continueSwitchBtn")}
             </button>
             <button
               onclick={handleConfirmSwitchCloseSketchUp}
-              class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
+              class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
             >
               {t("closeAndSwitchBtn")}
             </button>

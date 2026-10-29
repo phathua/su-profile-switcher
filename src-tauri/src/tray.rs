@@ -40,11 +40,28 @@ pub fn build_tray_menu(app: &AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error
     menu.append(&version_sub)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
 
-    // Recent profiles (up to 3) with real native Windows checkmark
+    // Recent profiles (up to 3) with color dot, shortcut, and native Windows checkmark
     for (i, p) in cfg.recent_profiles.iter().take(3).enumerate() {
         let is_active = p == &cfg.active_profile;
         let id = format!("recent_{}", i);
-        let item = CheckMenuItem::with_id(app, &id, p, true, is_active, None::<&str>)?;
+        let meta = cfg.profiles_metadata.get(p);
+        
+        let color_dot = match meta.and_then(|m| m.color.as_deref()) {
+            Some("#00c8ff") | Some("#0284c7") => "🔵 ",
+            Some("#10b981") => "🟢 ",
+            Some("#f59e0b") => "🟡 ",
+            Some("#ef4444") => "🔴 ",
+            Some("#a855f7") => "🟣 ",
+            _ => "● ",
+        };
+
+        let shortcut_suffix = match meta.and_then(|m| m.shortcut.as_deref()) {
+            Some(sc) if !sc.trim().is_empty() => format!("  [{}]", sc),
+            _ => String::new(),
+        };
+
+        let display_label = format!("{}{}{}", color_dot, p, shortcut_suffix);
+        let item = CheckMenuItem::with_id(app, &id, &display_label, true, is_active, None::<&str>)?;
         menu.append(&item)?;
     }
     if !cfg.recent_profiles.is_empty() {
@@ -158,9 +175,25 @@ pub fn setup_tray(app: &AppHandle) -> Result<TrayIcon, tauri::Error> {
                         if let Some(cfg) = state.versions.get(&current_ver) {
                             if let Some(target) = cfg.recent_profiles.iter().take(3).nth(idx) {
                                 let target_clone = target.clone();
+
+                                // Check if SketchUp is running before switching
+                                if crate::process::is_sketchup_running() {
+                                    if let Some(w) = app.get_webview_window("main") {
+                                        let _ = w.show();
+                                        let _ = w.unminimize();
+                                        let _ = w.set_focus();
+                                        let _ = w.emit("request-confirm-switch", serde_json::json!({
+                                            "version": current_ver,
+                                            "targetProfile": target_clone,
+                                        }));
+                                    }
+                                    return;
+                                }
+
                                 let mut mutable_state = state.clone();
                                 let _ = engine::switch_profile(&current_ver, &target_clone, &mut mutable_state);
                                 update_tray_menu(app);
+                                crate::notification::show_profile_switched_toast(&target_clone);
                                 if let Some(w) = app.get_webview_window("main") {
                                     let _ = w.emit("profile-switched", target_clone);
                                 }

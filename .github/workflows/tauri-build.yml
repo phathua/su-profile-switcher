@@ -47,6 +47,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Auto Bump Version
+        run: node scripts/bump-version.js
+
       - name: Build Tauri App
         run: pnpm tauri build --no-bundle --target ${{ matrix.target }}
 

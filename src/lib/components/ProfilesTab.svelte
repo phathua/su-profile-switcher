@@ -3,11 +3,21 @@
   import { invoke } from "@tauri-apps/api/core";
   import {
     Play,
+    Stop,
     ArrowsClockwise,
     PencilSimple,
     Trash,
     FolderSimpleStar,
     Folder,
+    Briefcase,
+    PaintBrush,
+    Cube,
+    Compass,
+    Lightning,
+    Star,
+    Sparkle,
+    Cpu,
+    GameController,
     Plus,
     Check,
     PuzzlePiece,
@@ -17,15 +27,34 @@
     FileText,
   } from "phosphor-svelte";
 
+  const iconMap = {
+    Folder,
+    Briefcase,
+    PaintBrush,
+    Cube,
+    Compass,
+    Lightning,
+    Star,
+    Sparkle,
+    Cpu,
+    GameController,
+  };
+
   const currentVersion = $derived(appStore.state.selectedVersion || "SketchUp");
-  const versionConfig = $derived(appStore.state.versions[currentVersion] || { activeProfile: "Default", profiles: [] });
+  const versionConfig = $derived(appStore.state.versions[currentVersion] || { activeProfile: "Default", profiles: [], profilesMetadata: {} });
   const activeProfile = $derived(versionConfig.activeProfile || "Default");
   const profilesList = $derived(versionConfig.profiles || []);
+  const profilesMetadata = $derived(versionConfig.profilesMetadata || {});
 
-  async function handleLaunchSketchUp() {
-    const ok = await invoke("launch_sketchup", { version: currentVersion });
-    if (!ok) {
-      alert("Không tìm thấy SketchUp.");
+  async function handleActionSketchUp() {
+    if (appStore.sketchupRunning) {
+      await invoke("close_sketchup");
+      appStore.sketchupRunning = false;
+    } else {
+      const ok = await invoke("launch_sketchup", { version: currentVersion });
+      if (!ok) {
+        alert("Không tìm thấy SketchUp.");
+      }
     }
   }
 
@@ -86,14 +115,8 @@
       </div>
     </div>
 
-    <!-- Right: Process Status + Add Profile + Launch SketchUp -->
+    <!-- Right: Add Profile + Action SketchUp Button -->
     <div class="flex items-center space-x-1.5">
-      <!-- Process Status Pill -->
-      <div class="flex items-center space-x-1.5 px-2 py-1 rounded-md {appStore.sketchupRunning ? 'bg-sky-500/15 text-sky-700 dark:text-[#00c8ff] border border-sky-500/30' : 'bg-slate-100 dark:bg-[#151518] text-slate-600 dark:text-[#a1a1aa] border border-slate-200 dark:border-[#242429]'} text-[11px] font-semibold">
-        <span class="w-1.5 h-1.5 rounded-full {appStore.sketchupRunning ? 'bg-sky-500 animate-pulse' : 'bg-slate-400 dark:bg-[#71717a]'}"></span>
-        <span>{appStore.sketchupRunning ? t("statusRunning") : t("statusClosed")}</span>
-      </div>
-
       <!-- Add Profile Button (+) -->
       <button
         onclick={handleOpenCreateModal}
@@ -104,13 +127,20 @@
         <span>{t("addProfile")}</span>
       </button>
 
-      <!-- Launch SketchUp Button (High contrast white text on sky background) -->
+      <!-- Launch / Force Close SketchUp Button (High contrast, dynamic state) -->
       <button
-        onclick={handleLaunchSketchUp}
-        class="flex items-center space-x-1.5 px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+        onclick={handleActionSketchUp}
+        class="flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer {appStore.sketchupRunning
+          ? 'bg-rose-600 hover:bg-rose-500 text-white'
+          : 'bg-sky-600 hover:bg-sky-500 text-white'}"
       >
-        <Play size={12} weight="fill" />
-        <span>{t("launchSu")}</span>
+        {#if appStore.sketchupRunning}
+          <Stop size={12} weight="fill" />
+          <span>{t("killSu")}</span>
+        {:else}
+          <Play size={12} weight="fill" />
+          <span>{t("launchSu")}</span>
+        {/if}
       </button>
     </div>
   </div>
@@ -121,14 +151,25 @@
       {#each profilesList as profile}
         {@const isActive = profile === activeProfile}
         {@const comp = getComponentsFor(profile)}
+        {@const meta = profilesMetadata[profile] || {}}
+        {@const CustomIcon = meta.icon && iconMap[meta.icon] ? iconMap[meta.icon] : Folder}
+        {@const customColor = meta.color || (isActive ? '#0284c7' : '#64748b')}
         <div class="px-3 py-2 flex items-center justify-between hover:bg-[#f8fafc] dark:hover:bg-[#121216] transition-colors {isActive ? 'bg-[#f0f9ff] dark:bg-[#0f1117]' : ''}">
           <!-- Left: Profile Info & Components -->
           <div class="space-y-1">
             <div class="flex items-center space-x-2">
-              <div class="w-5 h-5 rounded flex items-center justify-center {isActive ? 'bg-[#00c8ff]/20 text-[#0284c7] dark:text-[#00c8ff]' : 'bg-[#e2e8f0] dark:bg-[#1a1a20] text-[#64748b] dark:text-[#a1a1aa]'}">
-                <Folder size={12} weight={isActive ? 'fill' : 'regular'} />
+              <div
+                class="w-5 h-5 rounded flex items-center justify-center {isActive ? 'ring-1 ring-offset-1 ring-sky-500/50' : ''}"
+                style="background-color: {customColor}22; color: {customColor};"
+              >
+                <CustomIcon size={12} weight={isActive ? 'fill' : 'regular'} />
               </div>
               <span class="text-xs font-semibold {isActive ? 'text-[#0284c7] dark:text-[#ffffff]' : 'text-[#334155] dark:text-[#d4d4d8]'}">{profile}</span>
+              {#if meta.shortcut}
+                <span class="px-1.5 py-0.2 bg-slate-100 dark:bg-[#1a1a20] border border-slate-300 dark:border-[#2e2e38] rounded text-[9px] font-mono text-slate-600 dark:text-[#94a3b8]">
+                  {meta.shortcut}
+                </span>
+              {/if}
               {#if isActive}
                 <span class="text-[10px] text-[#0284c7] dark:text-[#00c8ff] font-bold flex items-center space-x-0.5">
                   <Check size={10} weight="bold" />

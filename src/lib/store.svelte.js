@@ -265,6 +265,25 @@ export async function renameProfile(oldName, newName) {
   }
 }
 
+export async function updateProfileMetadata(profile, icon, color, shortcut) {
+  setBusy(true, "Đang cập nhật hồ sơ...");
+  try {
+    const ver = appStore.state.selectedVersion;
+    const s = await invoke("update_profile_metadata", {
+      version: ver,
+      profile,
+      icon,
+      color,
+      shortcut,
+    });
+    appStore.state = s;
+  } catch (e) {
+    alert(String(e));
+  } finally {
+    setBusy(false);
+  }
+}
+
 export async function deleteProfile(name) {
   setBusy(true, `Đang xóa hồ sơ '${name}'...`);
   try {

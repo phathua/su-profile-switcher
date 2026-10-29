@@ -3,7 +3,9 @@ pub mod engine;
 pub mod filter;
 pub mod hash;
 pub mod models;
+pub mod notification;
 pub mod process;
+pub mod shortcuts;
 pub mod tray;
 pub mod updater;
 
@@ -32,9 +34,11 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(AppStateWrapper(Mutex::new(initial_state)))
         .setup(|app| {
             let _ = tray::setup_tray(app.handle());
+            shortcuts::register_shortcuts(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -52,6 +56,7 @@ pub fn run() {
             commands::save_profile,
             commands::rename_profile,
             commands::delete_profile,
+            commands::update_profile_metadata,
             commands::check_matching_hash,
             commands::is_sketchup_running,
             commands::close_sketchup,

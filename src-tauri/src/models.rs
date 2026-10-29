@@ -1,6 +1,16 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProfileMetadata {
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
+    pub shortcut: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VersionConfig {
     #[serde(rename = "activeProfile", default = "default_profile")]
@@ -14,6 +24,9 @@ pub struct VersionConfig {
 
     #[serde(rename = "customExePath", default)]
     pub custom_exe_path: Option<String>,
+
+    #[serde(rename = "profilesMetadata", default)]
+    pub profiles_metadata: HashMap<String, ProfileMetadata>,
 }
 
 fn default_profile() -> String {
@@ -27,6 +40,7 @@ impl Default for VersionConfig {
             profiles: vec!["Default".to_string()],
             recent_profiles: vec!["Default".to_string()],
             custom_exe_path: None,
+            profiles_metadata: HashMap::new(),
         }
     }
 }

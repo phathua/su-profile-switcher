@@ -38,6 +38,7 @@ pub fn switch_profile(
     let mut state = state_wrap.0.lock().unwrap();
     engine::switch_profile(&version, &target_profile, &mut state)?;
     crate::tray::update_tray_menu(&app);
+    crate::notification::show_profile_switched_toast(&target_profile);
     Ok(state.clone())
 }
 
@@ -173,6 +174,29 @@ pub fn update_settings(
     engine::save_state(&state);
     crate::tray::update_tray_menu(&app);
     state.clone()
+}
+
+#[tauri::command]
+pub fn update_profile_metadata(
+    version: String,
+    profile: String,
+    icon: Option<String>,
+    color: Option<String>,
+    shortcut: Option<String>,
+    state_wrap: State<'_, AppStateWrapper>,
+    app: tauri::AppHandle,
+) -> Result<AppState, String> {
+    let mut state = state_wrap.0.lock().unwrap();
+    if let Some(cfg) = state.versions.get_mut(&version) {
+        let meta = cfg.profiles_metadata.entry(profile).or_default();
+        meta.icon = icon;
+        meta.color = color;
+        meta.shortcut = shortcut;
+    }
+    engine::save_state(&state);
+    crate::tray::update_tray_menu(&app);
+    crate::shortcuts::register_shortcuts(&app);
+    Ok(state.clone())
 }
 
 #[tauri::command]
