@@ -9,6 +9,9 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "build:portable": "tauri build --no-bundle",
+    "clean": "node scripts/clean.js",
+    "clean:cargo": "cargo clean --manifest-path src-tauri/Cargo.toml",
+    "clean:frontend": "node -e \"const fs = require('fs'); ['dist', 'node_modules/.vite'].forEach(d => fs.rmSync(d, { recursive: true, force: true }))\"",
     "bump": "node scripts/bump-version.js"
   },
   "dependencies": {
