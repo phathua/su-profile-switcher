@@ -1,20 +1,16 @@
 <script>
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { Minus, Square, CornersOut, X, ArrowClockwise, Sparkle } from "phosphor-svelte";
+  import { Minus, X, ArrowClockwise, Sparkle } from "phosphor-svelte";
   import { appStore, t, checkForUpdates, applyUpdateAndRestart } from "../store.svelte.js";
   import { APP_VERSION } from "../version.js";
 
   const appWindow = getCurrentWindow();
-  let isMaximized = $state(false);
 
   async function minimize() {
     await appWindow.minimize();
   }
 
-  async function toggleMaximize() {
-    await appWindow.toggleMaximize();
-    isMaximized = await appWindow.isMaximized();
-  }
+  // NOTE: Tuyệt đối không thêm nút hoặc tính năng phóng to (maximize) cửa sổ vào đây
 
   async function close() {
     await appWindow.hide();
@@ -67,17 +63,7 @@
     >
       <Minus size={12} weight="bold" />
     </button>
-    <button
-      onclick={toggleMaximize}
-      class="w-6.5 h-6.5 flex items-center justify-center rounded hover:bg-[#e2e8f0] dark:hover:bg-[#18181b] text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0f172a] dark:hover:text-[#ffffff] transition-colors cursor-pointer"
-      title={isMaximized ? "Thu nhỏ lại" : "Phóng to"}
-    >
-      {#if isMaximized}
-        <CornersOut size={12} weight="bold" />
-      {:else}
-        <Square size={11} weight="bold" />
-      {/if}
-    </button>
+    <!-- NOTE: Tuyệt đối không tự thêm nút phóng to (maximize) tại đây -->
     <button
       onclick={close}
       class="w-6.5 h-6.5 flex items-center justify-center rounded hover:bg-[#ef4444]/20 text-[#64748b] dark:text-[#a1a1aa] hover:text-[#ef4444] transition-colors cursor-pointer"
