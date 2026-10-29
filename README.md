@@ -1,108 +1,81 @@
-# su-profile-switcher
+# Chuyển đổi hồ sơ SketchUp (SketchUp Profile Switcher)
 
-> Lightweight, high-performance profile switcher and automation manager for Trimble SketchUp (2022 - 2026+), designed with Windows 11 Fluent Design and Lepo.co's WPF-UI.
+<p align="center">
+  <img src="public/icon.svg" width="96" height="96" alt="SketchUp Profile Switcher Logo" />
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
-[![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-blue.svg)]()
-[![.NET: 8.0 WPF](https://img.shields.io/badge/.NET-8.0%20WPF-purple.svg)]()
-[![Single File: Portable](https://img.shields.io/badge/Release-Single%20File%20Portable-success.svg)]()
+<p align="center">
+  <strong>Công cụ quản lý, chuyển đổi đa hồ sơ SketchUp siêu nhẹ, an toàn tuyệt đối và hiệu năng cao.</strong><br>
+  Xây dựng trên nền tảng <strong>Tauri v2</strong>, <strong>Svelte 5</strong> và <strong>Rust</strong>.
+</p>
 
----
-
-## Overview
-
-**su-profile-switcher** enables SketchUp professionals, 3D visualizers, and architects to hot-swap plugin configurations, custom keyboard shortcuts, and toolbar layouts instantly (sub-0.1s) across generic or customized profile sets (e.g., *Modeling*, *V-Ray Rendering*, *Layout Production*, or team-shared profiles).
-
-Traditional profile switches in SketchUp require manual copying or deleting gigabytes of plugin files. **su-profile-switcher** solves this by leveraging filesystem-level atomic moves (`Directory.Move`), eliminating data duplication while keeping profile swapping instantaneous regardless of library size.
-
----
-
-## Key Features
-
-- **Instant Hot-Swapping (O(1) Filesystem Operation)**
-  Moves active plugin folders and updates preferences within milliseconds on NTFS volumes.
-- **Full Configuration Synchronization**
-  Swaps all essential SketchUp configuration targets simultaneously:
-  - `Plugins/` directory (Ruby extensions, libraries, loader scripts)
-  - `SharedPreferences.json` (Custom keyboard shortcuts and general preferences)
-  - `PrivatePreferences.json` (Toolbar layouts, dock states, dialog positions)
-- **Multi-Version Auto-Detection**
-  Scans and supports Trimble SketchUp installations from 2022 through 2026+ across both Roaming and Local AppData.
-- **Safe Process Management**
-  Gracefully requests SketchUp to save work via `CloseMainWindow()` before swapping, waits for clean process termination, and automatically relaunches SketchUp afterwards.
-- **Cloud & Local Profile Import**
-  - **Google Drive Direct Downloader**: Parses Google Drive share links and automatically handles large-file confirmation tokens (`confirm=...`).
-  - **Smart Zip Mapper**: Intelligently unpacks archives whether they contain root `Plugins/` directories, loose `.rb` files, or preferences.
-- **Export / Packaging to Zip**
-  One-click packaging of the active or any selected profile into a standardized `.zip` archive ready to upload to Google Drive or share across team workstations.
-- **Desktop Shortcut Generator**
-  Employs native Win32 COM `IShellLinkW` / `IPersistFile` to generate one-click Desktop shortcuts with silent execution arguments (`--switch "<ProfileName>"`).
-- **System Tray (Taskbar) Integration**
-  Minimizes to the Windows Notification Area with a rich context menu:
-  - Active profile status indicator
-  - Quick switch between profiles directly from taskbar
-  - Toggle "Start with Windows" (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`)
-  - Instant language switcher
-  - Open Dashboard / Exit
-- **Bilingual Interface**
-  Full English and Pure Vietnamese localization switchable at runtime.
-- **100% Portable**
-  Single self-contained `.exe` binary with zero dependencies. Runs out-of-the-box on any Windows machine.
+<p align="center">
+  <a href="#-tính-năng-nổi-bật">Tính năng</a> •
+  <a href="#-hình-ảnh-giao-diện">Giao diện</a> •
+  <a href="#-tải-về--cài-đặt">Tải về</a> •
+  <a href="#-hướng-dẫn-sử-dụng">Sử dụng</a> •
+  <a href="#-công-nghệ">Công nghệ</a> •
+  <a href="README.en.md">English Documentation</a>
+</p>
 
 ---
 
-## Target Paths
+## 📸 Hình ảnh giao diện
 
-The application operates across standard SketchUp data directories:
-
-| Component | Target Location | Description |
-| :--- | :--- | :--- |
-| **Plugins** | `%APPDATA%\SketchUp\SketchUp 202x\SketchUp\Plugins\` | Active Ruby plugins & scripts |
-| **Shortcuts** | `%APPDATA%\SketchUp\SketchUp 202x\SketchUp\SharedPreferences.json` | Shortcuts and settings |
-| **Toolbars** | `%LOCALAPPDATA%\SketchUp\SketchUp 202x\SketchUp\PrivatePreferences.json` | Workspace & dock layout |
-| **Profile Storage**| `%APPDATA%\SketchUp\SketchUp 202x\SketchUp\Profiles\<ProfileName>\` | Local profiles archive |
+| Giao diện chính (Dark Mode) | Xác nhận xóa an toàn |
+| :---: | :---: |
+| ![Giao diện chính](docs/screenshots/main_interface.png) | ![Xác nhận xóa](docs/screenshots/delete_modal.png) |
 
 ---
 
-## CLI Automation & Silent Mode
+## ⚡ Tính năng nổi bật
 
-You can trigger silent profile swaps via command-line or external scripts:
-
-```bash
-# Switch to a specific profile silently (closes SU -> swaps -> relaunches SU -> exits)
-su-profile-switcher.exe --switch "Profile A"
-
-# Target a specific SketchUp version explicitly
-su-profile-switcher.exe --switch "V-Ray Setup" --version "SketchUp 2026"
-
-# Launch minimized to tray on system startup
-su-profile-switcher.exe --minimized
-```
+- 🚀 **Siêu nhẹ & Tốc độ tức thì**: Bộ nhớ tiêu thụ cực thấp (~20MB RAM), không phụ thuộc vào .NET Runtime hay Chromium cồng kềnh.
+- 🎨 **Tùy biến Hồ sơ trực quan**: Tự do đổi biểu tượng Phosphor Icons (10 bộ icon chuyên dụng kiến trúc/đồ họa), chọn màu sắc nhận diện và gán tên gợi nhớ.
+- ⌨️ **Phím tắt toàn cục (Global Hotkey)**: Gán tổ hợp phím (ví dụ: `Ctrl+Alt+1`, `Ctrl+Shift+D`) để chuyển đổi hồ sơ ngay lập tức khi đang ở ngoài màn hình desktop hay trong phần mềm khác.
+- 🔔 **Thông báo Windows Native**: Sử dụng trực tiếp hệ thống Windows Toast Notification API của Windows 10/11 với âm thanh và biểu ngữ Action Center chuẩn hệ điều hành.
+- 🛡️ **Bảo vệ toàn vẹn dữ liệu**: Tự động phát hiện khi SketchUp đang chạy, đưa ra hộp thoại cảnh báo trước khi sao chép và hỗ trợ nút **Buộc đóng SketchUp** một chạm.
+- 🔍 **Tự động nhận diện đa phiên bản**: Hỗ trợ toàn diện từ SketchUp 2021 đến SketchUp 2026 (quét cả thư mục tiêu chuẩn lẫn cấu trúc thư mục con của Trimble).
+- 🧩 **Bảo vệ Plugin Render độc lập**: Tùy chọn giữ nguyên các plugin render phức tạp (V-Ray, Enscape, D5 Render, Thea Render) tránh lỗi license khi đổi hồ sơ.
+- 📦 **Sao lưu & Nhập xuất Zip**: Đóng gói toàn bộ hồ sơ thành file `.zip` để chia sẻ cho đồng nghiệp hoặc chuyển máy trạm mới dễ dàng.
 
 ---
 
-## Building from Source
+## 📥 Tải về & Cài đặt
 
-### Prerequisites
-- Windows 10 (19041+) or Windows 11
-- [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+Truy cập trang [**GitHub Releases**](https://github.com/phathua/su-profile-switcher/releases) để tải về phiên bản phù hợp với máy tính của bạn:
 
-### Clone & Build
-```bash
-git clone https://github.com/phathua/su-profile-switcher.git
-cd su-profile-switcher
+- `SuPS-x64-v*.zip`: Dành cho Windows 64-bit tiêu chuẩn (khuyên dùng).
+- `SuPS-x86-v*.zip`: Dành cho Windows 32-bit.
+- `SuPS-arm64-v*.zip`: Dành cho các dòng máy Windows on ARM (Surface Pro Copilot+, Snapdragon X Elite).
 
-# Debug build
-dotnet build -c Debug
-
-# Single-file self-contained release build
-dotnet publish -c Release -r win-x64 /p:PublishSingleFile=true /p:SelfContained=true /p:PublishReadyToRun=true -o ./Build
-```
-
-The resulting standalone executable will be generated at `./Build/su-profile-switcher.exe`.
+> 💡 **Ứng dụng Portable**: Không cần cài đặt rườm rà. Chỉ cần giải nén file `.zip` và chạy file `.exe`.
 
 ---
 
-## License
+## 🖥️ Hướng dẫn sử dụng
 
-This project is licensed under the [MIT License](LICENSE).
+1. **Chọn phiên bản SketchUp**: Chọn phiên bản bạn đang dùng ở góc phải thanh điều hướng.
+2. **Tạo hồ sơ mới**: Nhấn vào nút `+ Tạo hồ sơ`, đặt tên và chọn các thành phần muốn lưu (Plugins, Phím tắt, Thanh công cụ, Vật liệu, Mẫu template).
+3. **Tùy chỉnh biểu tượng & Phím tắt**: Bấm biểu tượng cây bút tại dòng hồ sơ, chọn icon, màu sắc và bấm tổ hợp phím muốn gán.
+4. **Chuyển đổi hồ sơ**:
+   - Nhấn vào biểu tượng chuyển đổi cạnh hồ sơ trong danh sách.
+   - Hoặc click chuột phải vào icon ứng dụng dưới khay hệ thống (System Tray).
+   - Hoặc bấm trực tiếp phím tắt toàn cục đã gán.
+5. **Chạy & Đóng SketchUp**: Nút ở góc trên sẽ hiển thị `Chạy SketchUp` (màu xanh) khi phần mềm chưa mở, và tự động chuyển thành `Buộc đóng SketchUp` (màu đỏ) khi SketchUp đang chạy.
+
+---
+
+## 🛠️ Công nghệ phát triển
+
+- **Core Engine**: [Rust](https://www.rust-lang.org/) + [Tauri v2](https://v2.tauri.app/)
+- **Frontend Framework**: [Svelte 5](https://svelte.dev/) (Runes reactivity)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
+- **Icon System**: [Phosphor Icons](https://phosphoricons.com/)
+- **CI/CD Pipeline**: GitHub Actions với Node.js 24, tự động phát hành bản build đa kiến trúc kèm nhật ký thay đổi tự động.
+
+---
+
+## 📄 Giấy phép
+
+Phát hành dưới giấy phép [MIT License](LICENSE).
