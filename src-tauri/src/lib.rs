@@ -81,7 +81,10 @@ pub fn run() {
             commands::apply_update_and_restart,
             commands::get_changelog,
             commands::get_live_changelog,
-            commands::clear_changelog
+            commands::clear_changelog,
+            commands::export_batch_backup_zip,
+            commands::analyze_batch_import_source,
+            commands::execute_batch_import
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

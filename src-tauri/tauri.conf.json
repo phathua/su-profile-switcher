@@ -14,9 +14,9 @@
       {
         "label": "main",
         "title": "SketchUp Profile Switcher",
-        "width": 680,
+        "width": 700,
         "height": 420,
-        "minWidth": 640,
+        "minWidth": 680,
         "minHeight": 400,
         "resizable": true,
         "decorations": false,

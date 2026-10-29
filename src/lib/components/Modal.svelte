@@ -45,6 +45,7 @@
     ClockCounterClockwise,
     ArrowsClockwise,
     FileArrowUp,
+    Archive,
   } from "phosphor-svelte";
 
   const availableIcons = [
@@ -92,6 +93,7 @@
   let changelogEntries = $state([]);
   let liveDiff = $state(null);
   let isLoadingChangelog = $state(false);
+  let selectedProfileFilter = $state(null);
 
   // Import profile modal state
   let importProfileName = $state("");
@@ -103,6 +105,10 @@
   let importTemplates = $state(false);
   let importApplyImmediately = $state(false);
   let isExecutingImport = $state(false);
+
+  // Batch import modal state
+  let batchImportItems = $state([]);
+  let isExecutingBatchImport = $state(false);
 
   $effect(() => {
     if (appStore.modal) {
@@ -141,6 +147,7 @@
       } else if (appStore.modal.type === "changelog") {
         changelogEntries = [];
         liveDiff = null;
+        selectedProfileFilter = appStore.modal.targetProfile || null;
         loadChangelogData();
       } else if (appStore.modal.type === "import_profile_modal") {
         const analysis = appStore.modal.analysis || {};
@@ -153,9 +160,82 @@
         importTemplates = analysis.hasTemplates ?? false;
         importApplyImmediately = false;
         isExecutingImport = false;
+      } else if (appStore.modal.type === "batch_import_modal") {
+        const analysis = appStore.modal.analysis || {};
+        const profs = analysis.profiles || [];
+        const existingProfiles = appStore.state.versions[appStore.state.selectedVersion]?.profiles || [];
+
+        batchImportItems = profs.map((p) => {
+          let target = p.name;
+          if (existingProfiles.includes(p.name)) {
+            target = `${p.name}_Imported`;
+          }
+          return {
+            name: p.name,
+            targetName: target,
+            selected: true,
+            hasPlugins: p.hasPlugins,
+            hasShortcuts: p.hasShortcuts,
+            hasToolbars: p.hasToolbars,
+            hasMaterials: p.hasMaterials,
+            hasTemplates: p.hasTemplates,
+            pluginCount: p.pluginCount,
+            shortcutCount: p.shortcutCount,
+            importPlugins: p.hasPlugins,
+            importShortcuts: p.hasShortcuts,
+            importToolbars: p.hasToolbars,
+            importMaterials: p.hasMaterials,
+            importTemplates: p.hasTemplates,
+          };
+        });
+        isExecutingBatchImport = false;
       }
     }
   });
+
+  function toggleAllBatchImport(selected) {
+    batchImportItems = batchImportItems.map((item) => ({
+      ...item,
+      selected,
+    }));
+  }
+
+  async function handleExecuteBatchImportSubmit() {
+    if (!appStore.modal || !appStore.modal.sourcePath) return;
+    const selectedItems = batchImportItems.filter((i) => i.selected);
+    if (selectedItems.length === 0) {
+      alert("Vui lòng chọn ít nhất một hồ sơ để nhập.");
+      return;
+    }
+
+    isExecutingBatchImport = true;
+    try {
+      const itemsToPayload = selectedItems.map((i) => ({
+        name: i.name,
+        targetName: i.targetName.trim() || i.name,
+        importPlugins: i.importPlugins,
+        importShortcuts: i.importShortcuts,
+        importToolbars: i.importToolbars,
+        importMaterials: i.importMaterials,
+        importTemplates: i.importTemplates,
+      }));
+
+      const s = await invoke("execute_batch_import", {
+        version: appStore.state.selectedVersion,
+        sourcePath: appStore.modal.sourcePath,
+        items: itemsToPayload,
+      });
+
+      appStore.state = s;
+      await loadProfileComponents();
+      closeModal();
+      alert(`Đã nhập thành công ${selectedItems.length} hồ sơ!`);
+    } catch (e) {
+      alert("Lỗi nhập hàng loạt: " + String(e));
+    } finally {
+      isExecutingBatchImport = false;
+    }
+  }
 
   async function loadChangelogData() {
     isLoadingChangelog = true;
@@ -322,7 +402,7 @@
   <!-- Overlay Backdrop -->
   <div class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-3">
     <!-- Modal Container -->
-    <div class="bg-[#ffffff] dark:bg-[#0a0a0d] border border-[#cbd5e1] dark:border-[#222228] rounded-xl shadow-2xl w-full {appStore.modal?.type === 'view_profile' || appStore.modal?.type === 'changelog' ? 'max-w-[650px] max-h-[420px] h-[420px]' : appStore.modal?.type === 'import_profile_modal' ? 'max-w-[460px] max-h-[400px]' : 'max-w-[400px] max-h-[380px]'} overflow-hidden flex flex-col animate-in fade-in duration-100">
+    <div class="bg-[#ffffff] dark:bg-[#0a0a0d] border border-[#cbd5e1] dark:border-[#222228] rounded-xl shadow-2xl w-full {appStore.modal?.type === 'view_profile' ? 'max-w-[650px] max-h-[420px] h-[420px]' : appStore.modal?.type === 'changelog' ? 'max-w-[560px] max-h-[420px] h-auto' : appStore.modal?.type === 'batch_import_modal' ? 'max-w-[560px] max-h-[460px] h-auto' : appStore.modal?.type === 'import_profile_modal' ? 'max-w-[460px] max-h-[400px]' : 'max-w-[400px] max-h-[380px]'} overflow-hidden flex flex-col animate-in fade-in duration-100">
       
       <!-- 1. Create Profile Modal -->
       {#if appStore.modal.type === "create_profile" || appStore.modal.type === "save"}
@@ -860,7 +940,8 @@
         </div>
       {:else if appStore.modal.type === "changelog"}
         <!-- 8. Changelog Modal -->
-        <div class="p-4 flex flex-col h-full overflow-hidden space-y-3">
+        {@const displayedEntries = selectedProfileFilter ? changelogEntries.filter(e => e.profile === selectedProfileFilter) : changelogEntries}
+        <div class="p-4 flex flex-col max-h-[420px] overflow-hidden space-y-2.5">
           <!-- Header -->
           <div class="flex items-center justify-between pb-2 border-b border-[#e2e8f0] dark:border-[#1e1e24] shrink-0">
             <div class="flex items-center space-x-2">
@@ -893,7 +974,7 @@
           </div>
 
           <!-- Body Container -->
-          <div class="flex-1 overflow-y-auto space-y-3 min-h-0 pr-1">
+          <div class="flex-1 overflow-y-auto space-y-2.5 min-h-0 pr-1">
             <!-- Live Session Status Card -->
             <div class="p-2.5 rounded-lg border {liveDiff?.hasChanges ? 'bg-amber-500/5 border-amber-500/30' : 'bg-slate-50 dark:bg-[#121215] border-slate-200 dark:border-[#1e1e24]'}">
               <div class="flex items-center justify-between pb-1.5 border-b border-slate-200/60 dark:border-[#1e1e24]">
@@ -947,17 +1028,30 @@
 
             <!-- Timeline History List -->
             <div class="space-y-2">
-              <span class="text-[11px] font-bold text-slate-600 dark:text-[#a1a1aa] block">{t("historyHeading")} ({changelogEntries.length})</span>
+              <div class="flex items-center justify-between pb-0.5">
+                <span class="text-[11px] font-bold text-slate-600 dark:text-[#a1a1aa] block">
+                  {t("historyHeading")} ({displayedEntries.length})
+                </span>
+                {#if appStore.modal.targetProfile}
+                  <button
+                    type="button"
+                    onclick={() => (selectedProfileFilter = selectedProfileFilter ? null : appStore.modal.targetProfile)}
+                    class="text-[10px] px-2 py-0.5 rounded-full border transition-colors cursor-pointer {selectedProfileFilter ? 'bg-sky-500/15 text-sky-600 dark:text-[#00c8ff] border-sky-500/30 font-bold' : 'bg-slate-100 dark:bg-[#18181c] text-slate-500'}"
+                  >
+                    {selectedProfileFilter ? `Chỉ xem: ${selectedProfileFilter}` : 'Xem tất cả hồ sơ'}
+                  </button>
+                {/if}
+              </div>
 
-              {#if changelogEntries.length === 0}
-                <div class="flex flex-col items-center justify-center py-8 text-slate-400 dark:text-[#71717a]">
+              {#if displayedEntries.length === 0}
+                <div class="flex flex-col items-center justify-center py-6 text-slate-400 dark:text-[#71717a]">
                   <ClockCounterClockwise size={24} weight="duotone" class="mb-1 text-slate-400" />
                   <span class="text-xs font-semibold">{t("emptyChangelog")}</span>
                 </div>
               {:else}
-                <div class="space-y-2">
-                  {#each changelogEntries as entry}
-                    <div class="p-2.5 rounded-lg bg-[#f8fafc] dark:bg-[#121216] border border-[#e2e8f0] dark:border-[#1e1e24] space-y-1.5 text-xs">
+                <div class="space-y-1.5">
+                  {#each displayedEntries as entry}
+                    <div class="p-2 rounded-lg bg-[#f8fafc] dark:bg-[#121216] border border-[#e2e8f0] dark:border-[#1e1e24] space-y-1 text-xs">
                       <div class="flex items-center justify-between">
                         <div class="flex items-center space-x-2">
                           <span class="font-bold text-slate-800 dark:text-white">{entry.profile}</span>
@@ -1080,6 +1174,133 @@
             >
               {isExecutingImport ? 'Đang nhập...' : t("startImportBtn")}
             </button>
+          </div>
+        </div>
+
+      {:else if appStore.modal.type === "batch_import_modal"}
+        <!-- 10. Batch Import Multi-Profile Modal -->
+        {@const analysis = appStore.modal.analysis || {}}
+        <div class="p-4 space-y-3">
+          <div class="flex items-center justify-between pb-2 border-b border-[#e2e8f0] dark:border-[#1e1e24]">
+            <div class="flex items-center space-x-2">
+              <Archive size={15} weight="bold" class="text-sky-600 dark:text-[#00c8ff]" />
+              <span class="text-xs font-bold text-[#0f172a] dark:text-[#fafafa]">{t("batchImportHeading")}</span>
+              {#if analysis.sourceType === "archive"}
+                <span class="text-[10px] px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-600 dark:text-[#00c8ff] font-mono">ZIP</span>
+              {:else}
+                <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-200 dark:bg-[#202028] text-slate-600 dark:text-[#a1a1aa] font-mono">Folder</span>
+              {/if}
+            </div>
+            <button onclick={closeModal} class="text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0f172a] dark:hover:text-white cursor-pointer" title="Đóng">
+              <X size={14} weight="bold" />
+            </button>
+          </div>
+
+          <!-- Version mismatch gentle warning banner -->
+          {#if analysis.backupVersion && analysis.backupVersion !== appStore.state.selectedVersion}
+            <div class="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-[11px] flex items-center space-x-2">
+              <Warning size={15} weight="fill" class="shrink-0 text-amber-500" />
+              <span>
+                {t("versionMismatchWarning").replace('{backupVer}', analysis.backupVersion).replace('{currentVer}', appStore.state.selectedVersion)}
+              </span>
+            </div>
+          {/if}
+
+          <!-- Select all toolbar -->
+          <div class="flex items-center justify-between px-1 py-1 text-xs border-b border-[#e2e8f0] dark:border-[#1e1e24]">
+            <label class="flex items-center space-x-2 cursor-pointer font-semibold text-slate-700 dark:text-[#d4d4d8]">
+              <input
+                type="checkbox"
+                checked={batchImportItems.length > 0 && batchImportItems.every(i => i.selected)}
+                onchange={(e) => toggleAllBatchImport(e.currentTarget.checked)}
+                class="rounded accent-sky-500 w-3.5 h-3.5 cursor-pointer"
+              />
+              <span>{t("selectAll")} ({batchImportItems.filter(i => i.selected).length}/{batchImportItems.length})</span>
+            </label>
+          </div>
+
+          <!-- Profiles list -->
+          <div class="max-h-[220px] overflow-y-auto space-y-2 pr-1">
+            {#each batchImportItems as item, idx}
+              <div class="p-2.5 rounded-lg border transition-colors {item.selected ? 'bg-sky-500/5 dark:bg-[#131722] border-sky-500/30' : 'bg-slate-50 dark:bg-[#121216] border-[#e2e8f0] dark:border-[#1e1e24] opacity-60'} space-y-2">
+                <div class="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    bind:checked={item.selected}
+                    class="rounded accent-sky-500 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <div class="flex-1 flex items-center space-x-2">
+                    <span class="text-xs font-bold text-slate-800 dark:text-white shrink-0">{item.name}</span>
+                    <span class="text-[10px] text-slate-400">→</span>
+                    <input
+                      type="text"
+                      bind:value={item.targetName}
+                      disabled={!item.selected}
+                      placeholder={t("targetProfileNameLabel")}
+                      class="flex-1 bg-white dark:bg-[#18181c] border border-slate-300 dark:border-[#27272f] rounded px-2 py-0.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+
+                <!-- Selective component checkboxes for this profile -->
+                {#if item.selected}
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1 pl-5 text-[11px] text-slate-600 dark:text-slate-300">
+                    {#if item.hasPlugins}
+                      <label class="inline-flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" bind:checked={item.importPlugins} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
+                        <span>Plugins ({item.pluginCount})</span>
+                      </label>
+                    {/if}
+                    {#if item.hasShortcuts}
+                      <label class="inline-flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" bind:checked={item.importShortcuts} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
+                        <span>Phím tắt</span>
+                      </label>
+                    {/if}
+                    {#if item.hasToolbars}
+                      <label class="inline-flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" bind:checked={item.importToolbars} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
+                        <span>Thanh công cụ</span>
+                      </label>
+                    {/if}
+                    {#if item.hasMaterials}
+                      <label class="inline-flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" bind:checked={item.importMaterials} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
+                        <span>Vật liệu</span>
+                      </label>
+                    {/if}
+                    {#if item.hasTemplates}
+                      <label class="inline-flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" bind:checked={item.importTemplates} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
+                        <span>Mẫu</span>
+                      </label>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            {/each}
+          </div>
+
+          <!-- Action buttons -->
+          <div class="pt-3 border-t border-[#e2e8f0] dark:border-[#1e1e24] flex items-center justify-between">
+            <span class="text-[11px] text-slate-500 dark:text-[#a1a1aa]">
+              {batchImportItems.filter(i => i.selected).length} {t("selectedCount").toLowerCase()}
+            </span>
+            <div class="flex items-center space-x-2">
+              <button
+                onclick={closeModal}
+                class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-[#d4d4d8] hover:bg-slate-100 dark:hover:bg-[#18181c] cursor-pointer"
+              >
+                {t("cancelBtn")}
+              </button>
+              <button
+                onclick={handleExecuteBatchImportSubmit}
+                disabled={isExecutingBatchImport || batchImportItems.filter(i => i.selected).length === 0}
+                class="px-4 py-1.5 rounded-lg text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                {isExecutingBatchImport ? 'Đang nhập...' : t("importSelectedBtn")}
+              </button>
+            </div>
           </div>
         </div>
       {/if}

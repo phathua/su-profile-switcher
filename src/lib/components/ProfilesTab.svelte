@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from "svelte";
   import { appStore, switchProfile, deleteProfile, setBusy, t } from "../store.svelte.js";
   import { invoke } from "@tauri-apps/api/core";
   import { open } from "@tauri-apps/plugin-dialog";
@@ -33,6 +34,8 @@
     CaretDown,
     MagnifyingGlass,
     X,
+    DotsThreeVertical,
+    SortAscending,
   } from "phosphor-svelte";
 
   const iconMap = {
@@ -57,7 +60,24 @@
   let showFilter = $state(false);
   let searchQuery = $state("");
   let activeFilterChip = $state("all"); // 'all' | 'has_plugins' | 'has_shortcuts' | 'active'
+  let sortBy = $state("created_desc");
   let isImportMenuOpen = $state(false);
+  let activeRowMenu = $state(null);
+
+  onMount(() => {
+    const handleGlobalClick = (e) => {
+      if (!e.target.closest(".import-dropdown-container")) {
+        isImportMenuOpen = false;
+      }
+      if (!e.target.closest(".row-menu-container")) {
+        activeRowMenu = null;
+      }
+    };
+    window.addEventListener("click", handleGlobalClick);
+    return () => {
+      window.removeEventListener("click", handleGlobalClick);
+    };
+  });
 
   function getComponentsFor(profile) {
     return appStore.profileComponents.find((c) => c.name === profile) || {
@@ -71,6 +91,24 @@
       createdAt: null,
       updatedAt: null,
     };
+  }
+
+  function parseDate(dStr) {
+    if (!dStr) return 0;
+    const parts = dStr.split(" ");
+    const dateParts = parts[0].split("/");
+    if (dateParts.length < 3) return 0;
+    const day = parseInt(dateParts[0], 10);
+    const month = parseInt(dateParts[1], 10) - 1;
+    const year = parseInt(dateParts[2], 10);
+    let hours = 0;
+    let minutes = 0;
+    if (parts[1]) {
+      const timeParts = parts[1].split(":");
+      hours = parseInt(timeParts[0] || "0", 10);
+      minutes = parseInt(timeParts[1] || "0", 10);
+    }
+    return new Date(year, month, day, hours, minutes).getTime();
   }
 
   const filteredProfiles = $derived(
@@ -89,6 +127,32 @@
         return false;
       }
       return true;
+    })
+  );
+
+  const sortedProfiles = $derived(
+    [...filteredProfiles].sort((a, b) => {
+      const aComp = getComponentsFor(a);
+      const bComp = getComponentsFor(b);
+
+      switch (sortBy) {
+        case "created_desc":
+          return parseDate(bComp.createdAt) - parseDate(aComp.createdAt);
+        case "created_asc":
+          return parseDate(aComp.createdAt) - parseDate(bComp.createdAt);
+        case "updated_desc":
+          return parseDate(bComp.updatedAt) - parseDate(aComp.updatedAt);
+        case "name_asc":
+          return a.localeCompare(b);
+        case "name_desc":
+          return b.localeCompare(a);
+        case "plugins_desc":
+          return (bComp.pluginCount || 0) - (aComp.pluginCount || 0);
+        case "shortcuts_desc":
+          return (bComp.shortcutCount || 0) - (aComp.shortcutCount || 0);
+        default:
+          return 0;
+      }
     })
   );
 
@@ -155,9 +219,12 @@
   async function handleRunImportAnalysis(sourcePath) {
     setBusy(true, "Đang quét và phân tích dữ liệu...");
     try {
-      const res = await invoke("analyze_import_source", { sourcePath });
+      const res = await invoke("analyze_batch_import_source", {
+        version: currentVersion,
+        sourcePath,
+      });
       appStore.modal = {
-        type: "import_profile_modal",
+        type: "batch_import_modal",
         sourcePath,
         analysis: res,
       };
@@ -189,18 +256,8 @@
       </div>
     </div>
 
-    <!-- Right: Changelog + Filter + Import + Create Profile -->
+    <!-- Right: Filter + Import + Create Profile -->
     <div class="flex items-center space-x-1.5">
-      <!-- Changelog Button -->
-      <button
-        onclick={() => (appStore.modal = { type: "changelog" })}
-        class="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 dark:bg-[#141417] hover:bg-slate-200 dark:hover:bg-[#202026] border border-slate-300 dark:border-[#27272f] rounded-lg text-xs font-semibold text-slate-800 dark:text-[#f4f4f6] transition-colors cursor-pointer"
-        title={t("changelogBtn")}
-      >
-        <ClockCounterClockwise size={13} weight="bold" class="text-sky-600 dark:text-[#00c8ff]" />
-        <span>{t("changelogBtn")}</span>
-      </button>
-
       <!-- Filter Toggle Button -->
       <button
         onclick={() => (showFilter = !showFilter)}
@@ -213,15 +270,13 @@
         <span>{t("filterBtn")}</span>
       </button>
 
-      <!-- Import Profile Dropdown -->
-      <div
-        role="group"
-        class="relative inline-block"
-        onmouseenter={() => (isImportMenuOpen = true)}
-        onmouseleave={() => (isImportMenuOpen = false)}
-      >
+      <!-- Import Profile Dropdown (Fixed mouse hover gap) -->
+      <div class="relative inline-block import-dropdown-container">
         <button
-          onclick={() => (isImportMenuOpen = !isImportMenuOpen)}
+          onclick={(e) => {
+            e.stopPropagation();
+            isImportMenuOpen = !isImportMenuOpen;
+          }}
           class="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 dark:bg-[#141417] hover:bg-slate-200 dark:hover:bg-[#202026] border border-slate-300 dark:border-[#27272f] rounded-lg text-xs font-semibold text-slate-800 dark:text-[#f4f4f6] transition-colors cursor-pointer"
           title={t("importProfileBtn")}
         >
@@ -231,27 +286,29 @@
         </button>
 
         {#if isImportMenuOpen}
-          <div class="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-[#121216] border border-[#e2e8f0] dark:border-[#262630] rounded-lg shadow-lg z-50 py-1 overflow-hidden">
-            <button
-              onclick={() => {
-                isImportMenuOpen = false;
-                handleSelectFolder();
-              }}
-              class="w-full px-3 py-1.5 flex items-center space-x-2 text-xs font-medium text-slate-700 dark:text-[#d4d4d8] hover:bg-sky-50 dark:hover:bg-[#1c1c24] hover:text-sky-600 dark:hover:text-[#00c8ff] cursor-pointer text-left"
-            >
-              <FolderOpen size={13} class="text-sky-600 dark:text-[#00c8ff]" />
-              <span>{t("importFolderItem")}</span>
-            </button>
-            <button
-              onclick={() => {
-                isImportMenuOpen = false;
-                handleSelectZip();
-              }}
-              class="w-full px-3 py-1.5 flex items-center space-x-2 text-xs font-medium text-slate-700 dark:text-[#d4d4d8] hover:bg-sky-50 dark:hover:bg-[#1c1c24] hover:text-sky-600 dark:hover:text-[#00c8ff] cursor-pointer text-left"
-            >
-              <FileZip size={13} class="text-sky-600 dark:text-[#00c8ff]" />
-              <span>{t("importZipItem")}</span>
-            </button>
+          <div class="absolute right-0 top-full pt-1 z-50">
+            <div class="w-36 bg-white dark:bg-[#121216] border border-[#e2e8f0] dark:border-[#262630] rounded-lg shadow-xl py-1 overflow-hidden">
+              <button
+                onclick={() => {
+                  isImportMenuOpen = false;
+                  handleSelectFolder();
+                }}
+                class="w-full px-3 py-1.5 flex items-center space-x-2 text-xs font-medium text-slate-700 dark:text-[#d4d4d8] hover:bg-sky-50 dark:hover:bg-[#1c1c24] hover:text-sky-600 dark:hover:text-[#00c8ff] cursor-pointer text-left"
+              >
+                <FolderOpen size={13} class="text-sky-600 dark:text-[#00c8ff]" />
+                <span>{t("importFolderItem")}</span>
+              </button>
+              <button
+                onclick={() => {
+                  isImportMenuOpen = false;
+                  handleSelectZip();
+                }}
+                class="w-full px-3 py-1.5 flex items-center space-x-2 text-xs font-medium text-slate-700 dark:text-[#d4d4d8] hover:bg-sky-50 dark:hover:bg-[#1c1c24] hover:text-sky-600 dark:hover:text-[#00c8ff] cursor-pointer text-left"
+              >
+                <FileZip size={13} class="text-sky-600 dark:text-[#00c8ff]" />
+                <span>{t("importZipItem")}</span>
+              </button>
+            </div>
           </div>
         {/if}
       </div>
@@ -268,7 +325,7 @@
     </div>
   </div>
 
-  <!-- Dynamic Filter Bar (Appears when Filter button is active) -->
+  <!-- Dynamic Filter & Sort Bar -->
   {#if showFilter}
     <div class="bg-[#ffffff] dark:bg-[#0c0c0e] p-2 rounded-lg border border-[#e2e8f0] dark:border-[#1e1e24] flex items-center space-x-2 shrink-0">
       <!-- Search Input -->
@@ -311,13 +368,30 @@
           </button>
         {/each}
       </div>
+
+      <!-- Sort Dropdown Selector -->
+      <div class="flex items-center space-x-1 shrink-0 border-l border-slate-200 dark:border-[#1e1e24] pl-2">
+        <span class="text-[11px] text-slate-500 dark:text-[#71717a] font-medium">{t("sortBy")}</span>
+        <select
+          bind:value={sortBy}
+          class="bg-slate-100 dark:bg-[#18181e] border border-slate-300 dark:border-[#24242e] rounded-md px-2 py-0.5 text-[11px] text-slate-800 dark:text-[#e4e4e7] focus:outline-none focus:border-sky-500 cursor-pointer"
+        >
+          <option value="created_desc">{t("sortCreatedDesc")}</option>
+          <option value="created_asc">{t("sortCreatedAsc")}</option>
+          <option value="updated_desc">{t("sortUpdatedDesc")}</option>
+          <option value="name_asc">{t("sortNameAsc")}</option>
+          <option value="name_desc">{t("sortNameDesc")}</option>
+          <option value="plugins_desc">{t("sortPluginsDesc")}</option>
+          <option value="shortcuts_desc">{t("sortShortcutsDesc")}</option>
+        </select>
+      </div>
     </div>
   {/if}
 
-  <!-- Profiles List Container (Flex-1 expands dynamically with window height) -->
+  <!-- Profiles List Container -->
   <div class="flex-1 bg-[#ffffff] dark:bg-[#0a0a0c] border border-[#e2e8f0] dark:border-[#1e1e24] rounded-lg overflow-hidden flex flex-col min-h-0">
     <div class="flex-1 overflow-y-auto divide-y divide-[#e2e8f0] dark:divide-[#1a1a20]">
-      {#each filteredProfiles as profile}
+      {#each sortedProfiles as profile}
         {@const isActive = profile === activeProfile}
         {@const comp = getComponentsFor(profile)}
         {@const meta = profilesMetadata[profile] || {}}
@@ -325,28 +399,28 @@
         {@const customColor = meta.color || (isActive ? '#0284c7' : '#64748b')}
         <div class="px-3 py-2 flex items-center justify-between hover:bg-[#f8fafc] dark:hover:bg-[#121216] transition-colors {isActive ? 'bg-[#f0f9ff] dark:bg-[#0f1117]' : ''}">
           <!-- Left: Profile Info & Components -->
-          <div class="space-y-1">
+          <div class="space-y-1 flex-1 min-w-0 pr-2">
             <div class="flex items-center space-x-2">
               <div
-                class="w-5 h-5 rounded flex items-center justify-center {isActive ? 'ring-1 ring-offset-1 ring-sky-500/50' : ''}"
+                class="w-5 h-5 rounded flex items-center justify-center shrink-0 {isActive ? 'ring-1 ring-offset-1 ring-sky-500/50' : ''}"
                 style="background-color: {customColor}22; color: {customColor};"
               >
                 <CustomIcon size={12} weight={isActive ? 'fill' : 'regular'} />
               </div>
-              <span class="text-xs font-semibold {isActive ? 'text-[#0284c7] dark:text-[#ffffff]' : 'text-[#334155] dark:text-[#d4d4d8]'}">{profile}</span>
+              <span class="text-xs font-semibold truncate {isActive ? 'text-[#0284c7] dark:text-[#ffffff]' : 'text-[#334155] dark:text-[#d4d4d8]'}">{profile}</span>
               {#if meta.shortcut}
-                <span class="px-1.5 py-0.2 bg-slate-100 dark:bg-[#1a1a20] border border-slate-300 dark:border-[#2e2e38] rounded text-[9px] font-mono text-slate-600 dark:text-[#94a3b8]">
+                <span class="px-1.5 py-0.2 bg-slate-100 dark:bg-[#1a1a20] border border-slate-300 dark:border-[#2e2e38] rounded text-[9px] font-mono text-slate-600 dark:text-[#94a3b8] shrink-0">
                   {meta.shortcut}
                 </span>
               {/if}
               {#if isActive}
-                <span class="text-[10px] text-[#0284c7] dark:text-[#00c8ff] font-bold flex items-center space-x-0.5">
+                <span class="text-[10px] text-[#0284c7] dark:text-[#00c8ff] font-bold flex items-center space-x-0.5 shrink-0">
                   <Check size={10} weight="bold" />
                 </span>
               {/if}
 
               <!-- Timestamps (Created & Updated) -->
-              <div class="flex items-center space-x-1.5 text-[10px] text-slate-400 dark:text-[#71717a] font-normal pl-2">
+              <div class="flex items-center space-x-1.5 text-[10px] text-slate-400 dark:text-[#71717a] font-normal pl-2 shrink-0">
                 {#if comp.createdAt}
                   <span>{t("createdLabel")}: {comp.createdAt}</span>
                 {/if}
@@ -357,7 +431,7 @@
               </div>
             </div>
 
-            <!-- Profile Components Pills (Icons & High Contrast) -->
+            <!-- Profile Components Pills -->
             <div class="flex items-center space-x-1 pl-7 text-[10px]">
               {#if comp.hasPlugins}
                 <span class="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-[#141418] text-slate-700 dark:text-[#d4d4d8] border border-slate-300 dark:border-[#222228] font-medium">
@@ -392,8 +466,8 @@
             </div>
           </div>
 
-          <!-- Actions -->
-          <div class="flex items-center space-x-1 shrink-0">
+          <!-- Right Actions: Switch Button + 3-dots Menu Button -->
+          <div class="flex items-center space-x-1 shrink-0 relative row-menu-container">
             {#if !isActive}
               <button
                 onclick={() => handleSwitch(profile)}
@@ -404,36 +478,81 @@
               </button>
             {/if}
 
-            <button
-              onclick={() => handleOpenViewModal(profile)}
-              class="p-1.5 hover:bg-[#e2e8f0] dark:hover:bg-[#1e1e26] rounded text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0284c7] dark:hover:text-[#00c8ff] transition-colors cursor-pointer"
-              title="Xem chi tiết"
-            >
-              <Eye size={13} />
-            </button>
-
-            <button
-              onclick={() => handleOpenRenameModal(profile)}
-              class="p-1.5 hover:bg-[#e2e8f0] dark:hover:bg-[#1e1e26] rounded text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0f172a] dark:hover:text-[#fafafa] transition-colors cursor-pointer"
-              title={t("renameTooltip")}
-            >
-              <PencilSimple size={13} />
-            </button>
-
-            {#if !isActive}
+            <!-- 3-dots Menu Button -->
+            <div class="relative">
               <button
-                onclick={() => handleDelete(profile)}
-                class="p-1.5 hover:bg-[#fee2e2] dark:hover:bg-[#ef4444]/20 rounded text-[#64748b] dark:text-[#a1a1aa] hover:text-[#ef4444] transition-colors cursor-pointer"
-                title={t("deleteTooltip")}
+                onclick={(e) => {
+                  e.stopPropagation();
+                  activeRowMenu = activeRowMenu === profile ? null : profile;
+                }}
+                class="p-1.5 hover:bg-[#e2e8f0] dark:hover:bg-[#1e1e26] rounded text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0f172a] dark:hover:text-white transition-colors cursor-pointer {activeRowMenu === profile ? 'bg-[#e2e8f0] dark:bg-[#1e1e26] text-sky-600 dark:text-[#00c8ff]' : ''}"
+                title="Tùy chọn hồ sơ"
               >
-                <Trash size={13} />
+                <DotsThreeVertical size={14} weight="bold" />
               </button>
-            {/if}
+
+              {#if activeRowMenu === profile}
+                <div class="absolute right-0 top-full pt-1 z-40">
+                  <div class="w-38 bg-white dark:bg-[#121216] border border-[#e2e8f0] dark:border-[#262630] rounded-lg shadow-xl py-1 overflow-hidden">
+                    <!-- Chỉnh sửa -->
+                    <button
+                      onclick={() => {
+                        activeRowMenu = null;
+                        handleOpenRenameModal(profile);
+                      }}
+                      class="w-full px-3 py-1.5 flex items-center space-x-2 text-xs font-medium text-slate-700 dark:text-[#d4d4d8] hover:bg-sky-50 dark:hover:bg-[#1c1c24] hover:text-sky-600 dark:hover:text-[#00c8ff] cursor-pointer text-left"
+                    >
+                      <PencilSimple size={13} />
+                      <span>{t("editProfile")}</span>
+                    </button>
+
+                    <!-- Xem chi tiết -->
+                    <button
+                      onclick={() => {
+                        activeRowMenu = null;
+                        handleOpenViewModal(profile);
+                      }}
+                      class="w-full px-3 py-1.5 flex items-center space-x-2 text-xs font-medium text-slate-700 dark:text-[#d4d4d8] hover:bg-sky-50 dark:hover:bg-[#1c1c24] hover:text-sky-600 dark:hover:text-[#00c8ff] cursor-pointer text-left"
+                    >
+                      <Eye size={13} />
+                      <span>{t("viewProfile")}</span>
+                    </button>
+
+                    <!-- Xem nhật ký thay đổi -->
+                    <button
+                      onclick={() => {
+                        activeRowMenu = null;
+                        appStore.modal = { type: "changelog", targetProfile: profile };
+                      }}
+                      class="w-full px-3 py-1.5 flex items-center space-x-2 text-xs font-medium text-slate-700 dark:text-[#d4d4d8] hover:bg-sky-50 dark:hover:bg-[#1c1c24] hover:text-sky-600 dark:hover:text-[#00c8ff] cursor-pointer text-left"
+                    >
+                      <ClockCounterClockwise size={13} />
+                      <span>{t("profileChangelog")}</span>
+                    </button>
+
+                    <!-- Xóa hồ sơ -->
+                    {#if !isActive}
+                      <div class="border-t border-[#e2e8f0] dark:border-[#1e1e24] my-0.5"></div>
+                      <button
+                        onclick={() => {
+                          activeRowMenu = null;
+                          handleDelete(profile);
+                        }}
+                        class="w-full px-3 py-1.5 flex items-center space-x-2 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 cursor-pointer text-left"
+                      >
+                        <Trash size={13} />
+                        <span>{t("deleteProfile")}</span>
+                      </button>
+                    {/if}
+                  </div>
+                </div>
+              {/if}
+            </div>
           </div>
         </div>
       {/each}
 
-      {#if filteredProfiles.length === 0}
+      {#if sortedProfiles.length === 0}
         <div class="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-[#71717a]">
           <MagnifyingGlass size={26} weight="duotone" class="mb-2 text-slate-400" />
           <span class="text-xs font-semibold">{t("noProfilesMatch")}</span>

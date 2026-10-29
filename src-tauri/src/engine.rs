@@ -550,6 +550,167 @@ pub fn export_profile_zip(version_display: &str, name: &str, zip_dest: &Path, st
     Ok(())
 }
 
+pub fn export_batch_backup_zip(
+    version_display: &str,
+    profiles_config: &[crate::models::ExportProfileItemConfig],
+    zip_dest: &Path,
+    state: &AppState,
+) -> Result<(), String> {
+    let roaming = get_roaming_sketchup_path(version_display);
+    let local = get_local_sketchup_path(version_display);
+    let profiles_dir = get_profiles_dir(version_display);
+
+    let active_profile = state.versions.get(version_display).map(|c| c.active_profile.clone()).unwrap_or_default();
+
+    let file = fs::File::create(zip_dest).map_err(|e| e.to_string())?;
+    let mut zip = ZipWriter::new(file);
+    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
+    let mut manifest_profiles = Vec::new();
+
+    for cfg in profiles_config {
+        let name = &cfg.name;
+        let is_active = name == &active_profile;
+
+        let plugins_src = if is_active { roaming.join("Plugins") } else { profiles_dir.join(name).join("Plugins") };
+        let shared_src = if is_active { roaming.join("SharedPreferences.json") } else { profiles_dir.join(name).join("SharedPreferences.json") };
+        let priv_src = if is_active { local.join("PrivatePreferences.json") } else { profiles_dir.join(name).join("PrivatePreferences.json") };
+        let mat_src = if is_active { roaming.join("Materials") } else { profiles_dir.join(name).join("Materials") };
+        let tmpl_src = if is_active { roaming.join("Templates") } else { profiles_dir.join(name).join("Templates") };
+
+        let plugin_count = if cfg.include_plugins && plugins_src.exists() {
+            crate::changelog::scan_user_plugin_names(&plugins_src).len()
+        } else {
+            0
+        };
+
+        let mut shortcut_count = 0;
+        if cfg.include_shortcuts && shared_src.exists() {
+            if let Ok(c) = fs::read_to_string(&shared_src) {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&c) {
+                    if let Some(s) = v.get("Windows Only").and_then(|w| w.get("Settings")).and_then(|st| st.as_object()) {
+                        for (k, _) in s {
+                            if k.starts_with("Shortcut_") {
+                                shortcut_count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        manifest_profiles.push(crate::models::BackupManifestProfile {
+            name: name.clone(),
+            has_plugins: cfg.include_plugins && plugins_src.exists(),
+            has_shortcuts: cfg.include_shortcuts && shared_src.exists(),
+            has_toolbars: cfg.include_toolbars && priv_src.exists(),
+            has_materials: cfg.include_materials && mat_src.exists(),
+            has_templates: cfg.include_templates && tmpl_src.exists(),
+            plugin_count,
+            shortcut_count,
+        });
+
+        // 1. Plugins
+        if cfg.include_plugins && plugins_src.exists() {
+            for entry in WalkDir::new(&plugins_src).into_iter().filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if let Ok(rel) = path.strip_prefix(&plugins_src) {
+                    let rel_str = rel.to_string_lossy().replace('\\', "/");
+                    if rel_str.is_empty() {
+                        continue;
+                    }
+                    if state.exclude_render_and_default_plugins && filter::is_excluded(&rel_str) {
+                        continue;
+                    }
+                    let zip_entry = format!("profiles/{}/Plugins/{}", name, rel_str);
+                    if path.is_file() {
+                        zip.start_file(zip_entry, options).map_err(|e| e.to_string())?;
+                        let mut f = fs::File::open(path).map_err(|e| e.to_string())?;
+                        std::io::copy(&mut f, &mut zip).map_err(|e| e.to_string())?;
+                    } else if path.is_dir() {
+                        zip.add_directory(zip_entry, options).map_err(|e| e.to_string())?;
+                    }
+                }
+            }
+        }
+
+        // 2. Shortcuts
+        if cfg.include_shortcuts && shared_src.exists() {
+            let zip_entry = format!("profiles/{}/SharedPreferences.json", name);
+            zip.start_file(zip_entry, options).map_err(|e| e.to_string())?;
+            let mut f = fs::File::open(&shared_src).map_err(|e| e.to_string())?;
+            std::io::copy(&mut f, &mut zip).map_err(|e| e.to_string())?;
+        }
+
+        // 3. Toolbars
+        if cfg.include_toolbars && priv_src.exists() {
+            let zip_entry = format!("profiles/{}/PrivatePreferences.json", name);
+            zip.start_file(zip_entry, options).map_err(|e| e.to_string())?;
+            let mut f = fs::File::open(&priv_src).map_err(|e| e.to_string())?;
+            std::io::copy(&mut f, &mut zip).map_err(|e| e.to_string())?;
+        }
+
+        // 4. Materials
+        if cfg.include_materials && mat_src.exists() {
+            for entry in WalkDir::new(&mat_src).into_iter().filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if let Ok(rel) = path.strip_prefix(&mat_src) {
+                    let rel_str = rel.to_string_lossy().replace('\\', "/");
+                    if rel_str.is_empty() {
+                        continue;
+                    }
+                    let zip_entry = format!("profiles/{}/Materials/{}", name, rel_str);
+                    if path.is_file() {
+                        zip.start_file(zip_entry, options).map_err(|e| e.to_string())?;
+                        let mut f = fs::File::open(path).map_err(|e| e.to_string())?;
+                        std::io::copy(&mut f, &mut zip).map_err(|e| e.to_string())?;
+                    } else if path.is_dir() {
+                        zip.add_directory(zip_entry, options).map_err(|e| e.to_string())?;
+                    }
+                }
+            }
+        }
+
+        // 5. Templates
+        if cfg.include_templates && tmpl_src.exists() {
+            for entry in WalkDir::new(&tmpl_src).into_iter().filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if let Ok(rel) = path.strip_prefix(&tmpl_src) {
+                    let rel_str = rel.to_string_lossy().replace('\\', "/");
+                    if rel_str.is_empty() {
+                        continue;
+                    }
+                    let zip_entry = format!("profiles/{}/Templates/{}", name, rel_str);
+                    if path.is_file() {
+                        zip.start_file(zip_entry, options).map_err(|e| e.to_string())?;
+                        let mut f = fs::File::open(path).map_err(|e| e.to_string())?;
+                        std::io::copy(&mut f, &mut zip).map_err(|e| e.to_string())?;
+                    } else if path.is_dir() {
+                        zip.add_directory(zip_entry, options).map_err(|e| e.to_string())?;
+                    }
+                }
+            }
+        }
+    }
+
+    // Write backup_manifest.json
+    let now_str = chrono::Local::now().format("%d/%m/%Y %H:%M").to_string();
+    let manifest = crate::models::BackupManifest {
+        app: "SketchUp Profile Switcher".to_string(),
+        version: "1.0.8".to_string(),
+        sketchup_version: version_display.to_string(),
+        backup_date: now_str,
+        profiles: manifest_profiles,
+    };
+    if let Ok(json_str) = serde_json::to_string_pretty(&manifest) {
+        zip.start_file("backup_manifest.json", options).map_err(|e| e.to_string())?;
+        std::io::copy(&mut json_str.as_bytes(), &mut zip).map_err(|e| e.to_string())?;
+    }
+
+    zip.finish().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 fn copy_plugins_filtered(source: &Path, destination: &Path, apply_exclusion: bool, move_items: bool) -> Result<(), String> {
     let _ = fs::create_dir_all(destination);
 
@@ -1403,6 +1564,418 @@ pub fn import_profile(
         switch_profile(version_display, name_trimmed, state)?;
     }
 
+    Ok(())
+}
+
+pub fn analyze_batch_import_source(
+    current_version: &str,
+    source_path: &str,
+) -> Result<crate::models::BatchImportAnalysis, String> {
+    let src = Path::new(source_path);
+    if !src.exists() {
+        return Err("Nguồn sao lưu không tồn tại.".to_string());
+    }
+
+    if src.is_file() && source_path.to_lowercase().ends_with(".zip") {
+        let file = fs::File::open(src).map_err(|e| format!("Không thể mở file zip: {}", e))?;
+        let mut archive = ZipArchive::new(file).map_err(|e| format!("Lỗi đọc file zip: {}", e))?;
+
+        // 1. Check if backup_manifest.json exists in zip
+        if let Ok(mut manifest_file) = archive.by_name("backup_manifest.json") {
+            let mut content = String::new();
+            if std::io::Read::read_to_string(&mut manifest_file, &mut content).is_ok() {
+                if let Ok(manifest) = serde_json::from_str::<crate::models::BackupManifest>(&content) {
+                    let is_mismatch = !manifest.sketchup_version.trim().is_empty()
+                        && !manifest.sketchup_version.eq_ignore_ascii_case(current_version);
+
+                    return Ok(crate::models::BatchImportAnalysis {
+                        source_path: source_path.to_string(),
+                        is_package: true,
+                        backup_version: Some(manifest.sketchup_version),
+                        current_version: current_version.to_string(),
+                        is_version_mismatch: is_mismatch,
+                        backup_date: Some(manifest.backup_date),
+                        profiles: manifest.profiles,
+                    });
+                }
+            }
+        }
+
+        // 2. Check if zip has profiles/<name>/ structure
+        let mut detected_profiles: HashMap<String, crate::models::BackupManifestProfile> = HashMap::new();
+        let mut detected_version = None;
+
+        for i in 0..archive.len() {
+            if let Ok(file) = archive.by_index(i) {
+                let name = file.name().replace('\\', "/");
+                let name_lower = name.to_lowercase();
+
+                if detected_version.is_none() {
+                    for v in &["2026", "2025", "2024", "2023", "2022", "2021"] {
+                        if name_lower.contains(v) {
+                            detected_version = Some(format!("SketchUp {}", v));
+                            break;
+                        }
+                    }
+                }
+
+                if name_lower.starts_with("profiles/") {
+                    let parts: Vec<&str> = name.split('/').collect();
+                    if parts.len() >= 2 && !parts[1].trim().is_empty() {
+                        let prof_name = parts[1].to_string();
+                        let p = detected_profiles.entry(prof_name.clone()).or_insert_with(|| {
+                            crate::models::BackupManifestProfile {
+                                name: prof_name,
+                                has_plugins: false,
+                                has_shortcuts: false,
+                                has_toolbars: false,
+                                has_materials: false,
+                                has_templates: false,
+                                plugin_count: 0,
+                                shortcut_count: 0,
+                            }
+                        });
+
+                        if name_lower.contains("/plugins/") {
+                            p.has_plugins = true;
+                            if name_lower.ends_with(".rb") {
+                                p.plugin_count += 1;
+                            }
+                        }
+                        if name_lower.contains("sharedpreferences") {
+                            p.has_shortcuts = true;
+                        }
+                        if name_lower.contains("privatepreferences") {
+                            p.has_toolbars = true;
+                        }
+                        if name_lower.contains("/materials/") {
+                            p.has_materials = true;
+                        }
+                        if name_lower.contains("/templates/") {
+                            p.has_templates = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if !detected_profiles.is_empty() {
+            let is_mismatch = detected_version.as_ref().map_or(false, |v| !v.eq_ignore_ascii_case(current_version));
+            return Ok(crate::models::BatchImportAnalysis {
+                source_path: source_path.to_string(),
+                is_package: true,
+                backup_version: detected_version,
+                current_version: current_version.to_string(),
+                is_version_mismatch: is_mismatch,
+                backup_date: None,
+                profiles: detected_profiles.into_values().collect(),
+            });
+        }
+
+        // 3. Fallback: single profile zip
+        let single = analyze_import_source(source_path)?;
+        let is_mismatch = single.detected_version.as_ref().map_or(false, |v| !v.eq_ignore_ascii_case(current_version));
+        let p = crate::models::BackupManifestProfile {
+            name: single.suggested_profile_name,
+            has_plugins: single.has_plugins,
+            has_shortcuts: single.has_shortcuts,
+            has_toolbars: single.has_toolbars,
+            has_materials: single.has_materials,
+            has_templates: single.has_templates,
+            plugin_count: single.plugin_count,
+            shortcut_count: 0,
+        };
+
+        return Ok(crate::models::BatchImportAnalysis {
+            source_path: source_path.to_string(),
+            is_package: false,
+            backup_version: single.detected_version,
+            current_version: current_version.to_string(),
+            is_version_mismatch: is_mismatch,
+            backup_date: None,
+            profiles: vec![p],
+        });
+    } else if src.is_dir() {
+        // Folder check
+        let manifest_file = src.join("backup_manifest.json");
+        if manifest_file.exists() {
+            if let Ok(content) = fs::read_to_string(&manifest_file) {
+                if let Ok(manifest) = serde_json::from_str::<crate::models::BackupManifest>(&content) {
+                    let is_mismatch = !manifest.sketchup_version.trim().is_empty()
+                        && !manifest.sketchup_version.eq_ignore_ascii_case(current_version);
+
+                    return Ok(crate::models::BatchImportAnalysis {
+                        source_path: source_path.to_string(),
+                        is_package: true,
+                        backup_version: Some(manifest.sketchup_version),
+                        current_version: current_version.to_string(),
+                        is_version_mismatch: is_mismatch,
+                        backup_date: Some(manifest.backup_date),
+                        profiles: manifest.profiles,
+                    });
+                }
+            }
+        }
+
+        let profiles_sub = src.join("profiles");
+        let profiles_sub_alt = src.join("Profiles");
+        let prof_dir = if profiles_sub.is_dir() {
+            Some(profiles_sub)
+        } else if profiles_sub_alt.is_dir() {
+            Some(profiles_sub_alt)
+        } else {
+            None
+        };
+
+        if let Some(pd) = prof_dir {
+            let mut list = Vec::new();
+            if let Ok(entries) = fs::read_dir(&pd) {
+                for e in entries.flatten() {
+                    if e.path().is_dir() {
+                        let name = e.file_name().to_string_lossy().to_string();
+                        let p_dir = e.path();
+                        let has_plugins = p_dir.join("Plugins").is_dir();
+                        let plugin_count = if has_plugins {
+                            crate::changelog::scan_user_plugin_names(&p_dir.join("Plugins")).len()
+                        } else {
+                            0
+                        };
+                        let has_shortcuts = p_dir.join("SharedPreferences.json").is_file();
+                        let has_toolbars = p_dir.join("PrivatePreferences.json").is_file();
+                        let has_materials = p_dir.join("Materials").is_dir();
+                        let has_templates = p_dir.join("Templates").is_dir();
+
+                        list.push(crate::models::BackupManifestProfile {
+                            name,
+                            has_plugins,
+                            has_shortcuts,
+                            has_toolbars,
+                            has_materials,
+                            has_templates,
+                            plugin_count,
+                            shortcut_count: 0,
+                        });
+                    }
+                }
+            }
+
+            if !list.is_empty() {
+                return Ok(crate::models::BatchImportAnalysis {
+                    source_path: source_path.to_string(),
+                    is_package: true,
+                    backup_version: None,
+                    current_version: current_version.to_string(),
+                    is_version_mismatch: false,
+                    backup_date: None,
+                    profiles: list,
+                });
+            }
+        }
+
+        // Fallback: single profile folder
+        let single = analyze_import_source(source_path)?;
+        let is_mismatch = single.detected_version.as_ref().map_or(false, |v| !v.eq_ignore_ascii_case(current_version));
+        let p = crate::models::BackupManifestProfile {
+            name: single.suggested_profile_name,
+            has_plugins: single.has_plugins,
+            has_shortcuts: single.has_shortcuts,
+            has_toolbars: single.has_toolbars,
+            has_materials: single.has_materials,
+            has_templates: single.has_templates,
+            plugin_count: single.plugin_count,
+            shortcut_count: 0,
+        };
+
+        return Ok(crate::models::BatchImportAnalysis {
+            source_path: source_path.to_string(),
+            is_package: false,
+            backup_version: single.detected_version,
+            current_version: current_version.to_string(),
+            is_version_mismatch: is_mismatch,
+            backup_date: None,
+            profiles: vec![p],
+        });
+    }
+
+    Err("Định dạng nguồn không được hỗ trợ.".to_string())
+}
+
+pub fn execute_batch_import(
+    version_display: &str,
+    source_path: &str,
+    items: &[crate::models::BatchImportProfileItem],
+    state: &mut AppState,
+) -> Result<(), String> {
+    if items.is_empty() {
+        return Ok(());
+    }
+
+    ensure_initialized(version_display, state);
+    let profiles_root = get_profiles_dir(version_display);
+    let src = Path::new(source_path);
+
+    if src.is_file() && source_path.to_lowercase().ends_with(".zip") {
+        let file = fs::File::open(src).map_err(|e| format!("Không thể mở file zip: {}", e))?;
+        let mut archive = ZipArchive::new(file).map_err(|e| format!("Lỗi đọc file zip: {}", e))?;
+
+        for item in items {
+            let target_name = item.target_name.trim();
+            if target_name.is_empty() {
+                continue;
+            }
+
+            let dest_dir = profiles_root.join(target_name);
+            let _ = fs::create_dir_all(&dest_dir);
+
+            let prefix_profile = format!("profiles/{}/", item.name).to_lowercase();
+            let prefix_profile_alt = format!("profiles/{}/", item.name);
+
+            for i in 0..archive.len() {
+                if let Ok(mut zfile) = archive.by_index(i) {
+                    let raw_name = zfile.name().replace('\\', "/");
+                    let name_lower = raw_name.to_lowercase();
+
+                    let rel_path = if name_lower.starts_with(&prefix_profile) {
+                        raw_name[prefix_profile_alt.len()..].to_string()
+                    } else if items.len() == 1 && !name_lower.starts_with("profiles/") {
+                        raw_name.clone()
+                    } else {
+                        continue;
+                    };
+
+                    let rel_lower = rel_path.to_lowercase();
+
+                    if item.import_plugins && (rel_lower.starts_with("plugins/") || rel_lower.ends_with(".rb") || rel_lower.ends_with(".rbe")) {
+                        let sub_rel = if rel_lower.starts_with("plugins/") {
+                            rel_path.trim_start_matches("plugins/").trim_start_matches("Plugins/").to_string()
+                        } else {
+                            rel_path.clone()
+                        };
+                        if !sub_rel.is_empty() {
+                            if state.exclude_render_and_default_plugins && filter::is_excluded(&sub_rel) {
+                                continue;
+                            }
+                            let outpath = dest_dir.join("Plugins").join(&sub_rel);
+                            if zfile.is_dir() {
+                                let _ = fs::create_dir_all(&outpath);
+                            } else {
+                                if let Some(p) = outpath.parent() {
+                                    let _ = fs::create_dir_all(p);
+                                }
+                                if let Ok(mut outfile) = fs::File::create(&outpath) {
+                                    let _ = std::io::copy(&mut zfile, &mut outfile);
+                                }
+                            }
+                        }
+                    }
+
+                    if item.import_shortcuts && (rel_lower.contains("sharedpreferences") || (rel_lower.ends_with(".dat") && !rel_lower.contains("private"))) {
+                        let outpath = dest_dir.join("SharedPreferences.json");
+                        if let Ok(mut outfile) = fs::File::create(&outpath) {
+                            let _ = std::io::copy(&mut zfile, &mut outfile);
+                            if state.remap_user_paths {
+                                remap_preferences_paths(&outpath);
+                            }
+                        }
+                    }
+
+                    if item.import_toolbars && (rel_lower.contains("privatepreferences") || rel_lower.contains("vitrithanhcongcu")) {
+                        let outpath = dest_dir.join("PrivatePreferences.json");
+                        if let Ok(mut outfile) = fs::File::create(&outpath) {
+                            let _ = std::io::copy(&mut zfile, &mut outfile);
+                            if state.remap_user_paths {
+                                remap_preferences_paths(&outpath);
+                            }
+                        }
+                    }
+
+                    if item.import_materials && (rel_lower.starts_with("materials/") || rel_lower.starts_with("vatlieu/")) {
+                        let sub_rel = rel_path.trim_start_matches("materials/").trim_start_matches("vatlieu/").to_string();
+                        let outpath = dest_dir.join("Materials").join(&sub_rel);
+                        if zfile.is_dir() {
+                            let _ = fs::create_dir_all(&outpath);
+                        } else {
+                            if let Some(p) = outpath.parent() {
+                                let _ = fs::create_dir_all(p);
+                            }
+                            if let Ok(mut outfile) = fs::File::create(&outpath) {
+                                let _ = std::io::copy(&mut zfile, &mut outfile);
+                            }
+                        }
+                    }
+
+                    if item.import_templates && (rel_lower.starts_with("templates/") || rel_lower.starts_with("maudunghinh/")) {
+                        let sub_rel = rel_path.trim_start_matches("templates/").trim_start_matches("maudunghinh/").to_string();
+                        let outpath = dest_dir.join("Templates").join(&sub_rel);
+                        if zfile.is_dir() {
+                            let _ = fs::create_dir_all(&outpath);
+                        } else {
+                            if let Some(p) = outpath.parent() {
+                                let _ = fs::create_dir_all(p);
+                            }
+                            if let Ok(mut outfile) = fs::File::create(&outpath) {
+                                let _ = std::io::copy(&mut zfile, &mut outfile);
+                            }
+                        }
+                    }
+                }
+            }
+
+            let config = state.versions.get_mut(version_display).ok_or("Config not found")?;
+            if !config.profiles.contains(&target_name.to_string()) {
+                config.profiles.push(target_name.to_string());
+            }
+
+            let now_str = chrono::Local::now().format("%d/%m/%Y %H:%M").to_string();
+            let date_str = chrono::Local::now().format("%d/%m/%Y").to_string();
+            let meta = config.profiles_metadata.entry(target_name.to_string()).or_default();
+            meta.created_at = Some(date_str);
+            meta.updated_at = Some(now_str);
+
+            let plugin_names = crate::changelog::scan_user_plugin_names(&dest_dir.join("Plugins"));
+            if !plugin_names.is_empty() {
+                let details = format!("Nhập hồ sơ hàng loạt từ gói sao lưu");
+                let _ = crate::changelog::record_change_event(
+                    version_display,
+                    target_name,
+                    "import",
+                    plugin_names.into_iter().collect(),
+                    vec![],
+                    &details,
+                );
+            }
+        }
+    } else if src.is_dir() {
+        for item in items {
+            let target_name = item.target_name.trim();
+            if target_name.is_empty() {
+                continue;
+            }
+
+            let profile_src = if src.join("profiles").join(&item.name).is_dir() {
+                src.join("profiles").join(&item.name)
+            } else if src.join("Profiles").join(&item.name).is_dir() {
+                src.join("Profiles").join(&item.name)
+            } else {
+                src.to_path_buf()
+            };
+
+            import_profile(
+                version_display,
+                target_name,
+                &profile_src.to_string_lossy(),
+                item.import_plugins,
+                item.import_shortcuts,
+                item.import_toolbars,
+                item.import_materials,
+                item.import_templates,
+                false,
+                state,
+            )?;
+        }
+    }
+
+    save_state(state);
     Ok(())
 }
 

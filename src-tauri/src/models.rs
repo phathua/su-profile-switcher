@@ -180,6 +180,85 @@ pub struct ImportAnalysis {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportProfileItemConfig {
+    pub name: String,
+    #[serde(rename = "includePlugins")]
+    pub include_plugins: bool,
+    #[serde(rename = "includeShortcuts")]
+    pub include_shortcuts: bool,
+    #[serde(rename = "includeToolbars")]
+    pub include_toolbars: bool,
+    #[serde(rename = "includeMaterials")]
+    pub include_materials: bool,
+    #[serde(rename = "includeTemplates")]
+    pub include_templates: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupManifestProfile {
+    pub name: String,
+    #[serde(rename = "hasPlugins")]
+    pub has_plugins: bool,
+    #[serde(rename = "hasShortcuts")]
+    pub has_shortcuts: bool,
+    #[serde(rename = "hasToolbars")]
+    pub has_toolbars: bool,
+    #[serde(rename = "hasMaterials")]
+    pub has_materials: bool,
+    #[serde(rename = "hasTemplates")]
+    pub has_templates: bool,
+    #[serde(rename = "pluginCount")]
+    pub plugin_count: usize,
+    #[serde(rename = "shortcutCount")]
+    pub shortcut_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupManifest {
+    pub app: String,
+    pub version: String,
+    #[serde(rename = "sketchupVersion")]
+    pub sketchup_version: String,
+    #[serde(rename = "backupDate")]
+    pub backup_date: String,
+    pub profiles: Vec<BackupManifestProfile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchImportAnalysis {
+    #[serde(rename = "sourcePath")]
+    pub source_path: String,
+    #[serde(rename = "isPackage")]
+    pub is_package: bool,
+    #[serde(rename = "backupVersion")]
+    pub backup_version: Option<String>,
+    #[serde(rename = "currentVersion")]
+    pub current_version: String,
+    #[serde(rename = "isVersionMismatch")]
+    pub is_version_mismatch: bool,
+    #[serde(rename = "backupDate")]
+    pub backup_date: Option<String>,
+    pub profiles: Vec<BackupManifestProfile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchImportProfileItem {
+    pub name: String,
+    #[serde(rename = "targetName")]
+    pub target_name: String,
+    #[serde(rename = "importPlugins")]
+    pub import_plugins: bool,
+    #[serde(rename = "importShortcuts")]
+    pub import_shortcuts: bool,
+    #[serde(rename = "importToolbars")]
+    pub import_toolbars: bool,
+    #[serde(rename = "importMaterials")]
+    pub import_materials: bool,
+    #[serde(rename = "importTemplates")]
+    pub import_templates: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateInfo {
     #[serde(rename = "hasUpdate")]
     pub has_update: bool,

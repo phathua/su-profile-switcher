@@ -1,5 +1,8 @@
 use tauri::{Emitter, State};
-use crate::models::{AppState, ChangelogEntry, ImportAnalysis, LiveDiff, ProfileComponents, ProfileDetails, UpdateInfo};
+use crate::models::{
+    AppState, BatchImportAnalysis, BatchImportProfileItem, ChangelogEntry, ExportProfileItemConfig,
+    ImportAnalysis, LiveDiff, ProfileComponents, ProfileDetails, UpdateInfo,
+};
 use crate::{changelog, engine, hash, process, updater, AppStateWrapper};
 
 #[tauri::command]
@@ -309,4 +312,38 @@ pub fn get_live_changelog(version: String, state_wrap: State<'_, AppStateWrapper
 #[tauri::command]
 pub fn clear_changelog() -> Result<(), String> {
     changelog::clear_changelog()
+}
+
+#[tauri::command]
+pub fn export_batch_backup_zip(
+    version: String,
+    profiles_config: Vec<ExportProfileItemConfig>,
+    zip_path: String,
+    state_wrap: State<'_, AppStateWrapper>,
+) -> Result<(), String> {
+    let state = state_wrap.0.lock().unwrap();
+    engine::export_batch_backup_zip(&version, &profiles_config, std::path::Path::new(&zip_path), &state)
+}
+
+#[tauri::command]
+pub fn analyze_batch_import_source(
+    version: String,
+    source_path: String,
+) -> Result<BatchImportAnalysis, String> {
+    engine::analyze_batch_import_source(&version, &source_path)
+}
+
+#[tauri::command]
+pub fn execute_batch_import(
+    version: String,
+    source_path: String,
+    items: Vec<BatchImportProfileItem>,
+    state_wrap: State<'_, AppStateWrapper>,
+    app: tauri::AppHandle,
+) -> Result<AppState, String> {
+    let mut state = state_wrap.0.lock().unwrap();
+    engine::execute_batch_import(&version, &source_path, &items, &mut state)?;
+    crate::tray::update_tray_menu(&app);
+    let _ = app.emit("profiles-updated", &*state);
+    Ok(state.clone())
 }
