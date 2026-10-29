@@ -4,6 +4,7 @@ version = "1.0.8"
 description = "Fast, portable, lightweight SketchUp profile switcher"
 authors = ["Senior Automation Engineer"]
 edition = "2021"
+default-run = "su-profile-switcher"
 
 [lib]
 name = "su_profile_switcher_lib"
