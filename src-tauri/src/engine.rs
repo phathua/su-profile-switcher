@@ -289,8 +289,22 @@ pub fn switch_profile(version_display: &str, target_profile: &str, state: &mut A
     let _ = fs::create_dir_all(&current_dir);
     let _ = fs::create_dir_all(&target_dir);
 
-    // 1. Move active user plugins to current profile dir (leave excluded plugins intact!)
+    // Record changelog before moving plugins
     let current_plugins = current_dir.join("Plugins");
+    let (added, removed) = crate::changelog::compute_plugins_diff(&active_plugins, &current_plugins);
+    if !added.is_empty() || !removed.is_empty() {
+        let details = format!("Chuyển từ '{}' sang '{}'", current_profile, target);
+        let _ = crate::changelog::record_change_event(
+            version_display,
+            &current_profile,
+            "switch",
+            added,
+            removed,
+            &details,
+        );
+    }
+
+    // 1. Move active user plugins to current profile dir (leave excluded plugins intact!)
     let _ = fs::create_dir_all(&current_plugins);
     if active_plugins.exists() {
         copy_plugins_filtered(&active_plugins, &current_plugins, state.exclude_render_and_default_plugins, true)?;
@@ -325,7 +339,20 @@ pub fn switch_profile(version_display: &str, target_profile: &str, state: &mut A
         }
     }
 
-    // 3. Update state
+    // 3. Update state & timestamps
+    let now_str = chrono::Local::now().format("%d/%m/%Y %H:%M").to_string();
+    config
+        .profiles_metadata
+        .entry(current_profile.clone())
+        .or_default()
+        .updated_at = Some(now_str.clone());
+
+    config
+        .profiles_metadata
+        .entry(target.clone())
+        .or_default()
+        .updated_at = Some(now_str);
+
     config.active_profile = target.clone();
     mark_recent(config, &target);
     save_state(state);
@@ -386,6 +413,15 @@ pub fn save_current_profile_as(
     if !config.profiles.contains(&trimmed) {
         config.profiles.push(trimmed.clone());
     }
+
+    let now_str = chrono::Local::now().format("%d/%m/%Y %H:%M").to_string();
+    let date_str = chrono::Local::now().format("%d/%m/%Y").to_string();
+    let meta = config.profiles_metadata.entry(trimmed.clone()).or_default();
+    if meta.created_at.is_none() {
+        meta.created_at = Some(date_str);
+    }
+    meta.updated_at = Some(now_str);
+
     mark_recent(config, &trimmed);
     save_state(state);
 
@@ -599,10 +635,74 @@ pub fn get_profile_components(version_display: &str, profile_name: &str, state: 
     };
 
     let has_plugins = plugins_dir.is_dir() && fs::read_dir(&plugins_dir).map(|mut it| it.next().is_some()).unwrap_or(false);
+    let plugin_count = if has_plugins {
+        crate::changelog::scan_user_plugin_names(&plugins_dir).len()
+    } else {
+        0
+    };
+
+    let mut shortcut_count = 0;
+    if shared_file.is_file() {
+        if let Ok(content) = fs::read_to_string(&shared_file) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(settings) = val.get("Windows Only").and_then(|w| w.get("Settings")).and_then(|s| s.as_object()) {
+                    for (k, v) in settings {
+                        if k.starts_with("Shortcut_") && v.as_str().is_some() {
+                            shortcut_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let has_shortcuts = shared_file.is_file() || profile_dir.join("PhimTat").exists();
     let has_toolbars = priv_file.is_file() || profile_dir.join("ViTriThanhCongCu").exists();
     let has_materials = mat_dir.is_dir() && fs::read_dir(&mat_dir).map(|mut it| it.next().is_some()).unwrap_or(false);
     let has_templates = tmpl_dir.is_dir() && fs::read_dir(&tmpl_dir).map(|mut it| it.next().is_some()).unwrap_or(false);
+
+    let (mut created_at, mut updated_at) = if let Some(meta) = state
+        .versions
+        .get(version_display)
+        .and_then(|v| v.profiles_metadata.get(profile_name))
+    {
+        (meta.created_at.clone(), meta.updated_at.clone())
+    } else {
+        (None, None)
+    };
+
+    if created_at.is_none() || updated_at.is_none() {
+        if let Ok(m) = fs::metadata(&profile_dir) {
+            if created_at.is_none() {
+                if let Ok(ctime) = m.created() {
+                    let dt: chrono::DateTime<chrono::Local> = ctime.into();
+                    created_at = Some(dt.format("%d/%m/%Y").to_string());
+                }
+            }
+            if updated_at.is_none() {
+                if let Ok(mtime) = m.modified() {
+                    let dt: chrono::DateTime<chrono::Local> = mtime.into();
+                    updated_at = Some(dt.format("%d/%m/%Y %H:%M").to_string());
+                }
+            }
+        }
+    }
+
+    if is_active {
+        if let Ok(m) = fs::metadata(&plugins_dir) {
+            if let Ok(mtime) = m.modified() {
+                let dt: chrono::DateTime<chrono::Local> = mtime.into();
+                updated_at = Some(dt.format("%d/%m/%Y %H:%M").to_string());
+            }
+        }
+    }
+
+    if created_at.is_none() {
+        created_at = Some(chrono::Local::now().format("%d/%m/%Y").to_string());
+    }
+    if updated_at.is_none() {
+        updated_at = Some(chrono::Local::now().format("%d/%m/%Y %H:%M").to_string());
+    }
 
     ProfileComponents {
         name: profile_name.to_string(),
@@ -611,6 +711,10 @@ pub fn get_profile_components(version_display: &str, profile_name: &str, state: 
         has_toolbars,
         has_materials,
         has_templates,
+        plugin_count,
+        shortcut_count,
+        created_at,
+        updated_at,
     }
 }
 
@@ -691,14 +795,18 @@ pub fn save_profile_custom(
         config.profiles.push(trimmed.clone());
     }
 
-    if icon.is_some() || color.is_some() {
-        let meta = config.profiles_metadata.entry(trimmed.clone()).or_default();
-        if icon.is_some() {
-            meta.icon = icon;
-        }
-        if color.is_some() {
-            meta.color = color;
-        }
+    let now_str = chrono::Local::now().format("%d/%m/%Y %H:%M").to_string();
+    let date_str = chrono::Local::now().format("%d/%m/%Y").to_string();
+    let meta = config.profiles_metadata.entry(trimmed.clone()).or_default();
+    if meta.created_at.is_none() {
+        meta.created_at = Some(date_str);
+    }
+    meta.updated_at = Some(now_str);
+    if icon.is_some() {
+        meta.icon = icon;
+    }
+    if color.is_some() {
+        meta.color = color;
     }
 
     mark_recent(config, &trimmed);
@@ -833,6 +941,7 @@ pub fn get_profile_details(
     // 2. Parse Shortcuts & Diff
     let default_map = load_default_shortcuts_map();
     let mut custom_shortcuts = Vec::new();
+    let mut all_shortcuts = Vec::new();
     let mut total_shortcuts_count = 0;
 
     if shared_pref_path.exists() {
@@ -844,27 +953,28 @@ pub fn get_profile_details(
                             if let Some(raw) = v.as_str() {
                                 total_shortcuts_count += 1;
                                 if let Some((key_display, cmd)) = parse_shortcut_string(raw) {
-                                    match default_map.get(&cmd) {
-                                        None => {
-                                            custom_shortcuts.push(ShortcutItem {
+                                    let item = match default_map.get(&cmd) {
+                                        None => ShortcutItem {
+                                            raw: raw.to_string(),
+                                            key_display,
+                                            command: cmd,
+                                            is_custom: true,
+                                            original_key: None,
+                                        },
+                                        Some(orig_key) => {
+                                            let is_diff = orig_key != &key_display;
+                                            ShortcutItem {
                                                 raw: raw.to_string(),
                                                 key_display,
                                                 command: cmd,
-                                                is_custom: true,
-                                                original_key: None,
-                                            });
-                                        }
-                                        Some(orig_key) => {
-                                            if orig_key != &key_display {
-                                                custom_shortcuts.push(ShortcutItem {
-                                                    raw: raw.to_string(),
-                                                    key_display,
-                                                    command: cmd,
-                                                    is_custom: true,
-                                                    original_key: Some(orig_key.clone()),
-                                                });
+                                                is_custom: is_diff,
+                                                original_key: if is_diff { Some(orig_key.clone()) } else { None },
                                             }
                                         }
+                                    };
+                                    all_shortcuts.push(item.clone());
+                                    if item.is_custom {
+                                        custom_shortcuts.push(item);
                                     }
                                 }
                             }
@@ -876,11 +986,13 @@ pub fn get_profile_details(
     }
 
     custom_shortcuts.sort_by(|a, b| a.key_display.cmp(&b.key_display));
+    all_shortcuts.sort_by(|a, b| a.key_display.cmp(&b.key_display));
 
     Ok(ProfileDetails {
         profile_name: profile_name.to_string(),
         plugins,
         custom_shortcuts,
+        all_shortcuts,
         total_shortcuts_count,
         default_shortcuts_count: default_map.len(),
     })
@@ -1262,6 +1374,28 @@ pub fn import_profile(
     if !config.profiles.contains(&name_trimmed.to_string()) {
         config.profiles.push(name_trimmed.to_string());
     }
+
+    let now_str = chrono::Local::now().format("%d/%m/%Y %H:%M").to_string();
+    let date_str = chrono::Local::now().format("%d/%m/%Y").to_string();
+    let meta = config.profiles_metadata.entry(name_trimmed.to_string()).or_default();
+    meta.created_at = Some(date_str);
+    meta.updated_at = Some(now_str);
+
+    let imported_plugins: Vec<String> = crate::changelog::scan_user_plugin_names(&dest_dir.join("Plugins"))
+        .into_iter()
+        .collect();
+    if !imported_plugins.is_empty() {
+        let details = format!("Nhập hồ sơ từ '{}'", source_path);
+        let _ = crate::changelog::record_change_event(
+            version_display,
+            name_trimmed,
+            "import",
+            imported_plugins,
+            vec![],
+            &details,
+        );
+    }
+
     mark_recent(config, name_trimmed);
     save_state(state);
 

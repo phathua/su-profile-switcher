@@ -7,10 +7,14 @@
     saveProfileCustom,
     switchProfile,
     getProfileDetails,
+    loadProfileComponents,
     t,
   } from "../store.svelte.js";
   import { invoke } from "@tauri-apps/api/core";
   import CustomCheckbox from "./CustomCheckbox.svelte";
+  import CustomDropdown from "./CustomDropdown.svelte";
+  import LazyPluginIcon from "./LazyPluginIcon.svelte";
+  import KeyboardVisualizer from "./KeyboardVisualizer.svelte";
   import {
     X,
     Warning,
@@ -23,6 +27,7 @@
     CheckCircle,
     PuzzlePiece,
     Keyboard,
+    ListDashes,
     Toolbox,
     Palette,
     FileText,
@@ -37,6 +42,9 @@
     Cpu,
     GameController,
     Command,
+    ClockCounterClockwise,
+    ArrowsClockwise,
+    FileArrowUp,
   } from "phosphor-svelte";
 
   const availableIcons = [
@@ -77,7 +85,24 @@
   let profileDetails = $state(null);
   let isLoadingDetails = $state(false);
   let viewTab = $state("plugins");
+  let shortcutViewMode = $state("list"); // "list" | "keyboard"
   let searchKeyword = $state("");
+
+  // Changelog modal state
+  let changelogEntries = $state([]);
+  let liveDiff = $state(null);
+  let isLoadingChangelog = $state(false);
+
+  // Import profile modal state
+  let importProfileName = $state("");
+  let importVersion = $state("");
+  let importPlugins = $state(true);
+  let importShortcuts = $state(true);
+  let importToolbars = $state(true);
+  let importMaterials = $state(false);
+  let importTemplates = $state(false);
+  let importApplyImmediately = $state(false);
+  let isExecutingImport = $state(false);
 
   $effect(() => {
     if (appStore.modal) {
@@ -113,9 +138,80 @@
           profileDetails = res;
           isLoadingDetails = false;
         });
+      } else if (appStore.modal.type === "changelog") {
+        changelogEntries = [];
+        liveDiff = null;
+        loadChangelogData();
+      } else if (appStore.modal.type === "import_profile_modal") {
+        const analysis = appStore.modal.analysis || {};
+        importProfileName = analysis.suggestedProfileName || "Imported_Profile";
+        importVersion = analysis.detectedVersion || appStore.state.selectedVersion;
+        importPlugins = analysis.hasPlugins ?? true;
+        importShortcuts = analysis.hasShortcuts ?? true;
+        importToolbars = analysis.hasToolbars ?? true;
+        importMaterials = analysis.hasMaterials ?? false;
+        importTemplates = analysis.hasTemplates ?? false;
+        importApplyImmediately = false;
+        isExecutingImport = false;
       }
     }
   });
+
+  async function loadChangelogData() {
+    isLoadingChangelog = true;
+    try {
+      const curVer = appStore.state.selectedVersion || "SketchUp";
+      const [entries, diff] = await Promise.all([
+        invoke("get_changelog"),
+        invoke("get_live_changelog", { version: curVer }),
+      ]);
+      changelogEntries = entries;
+      liveDiff = diff;
+    } catch (e) {
+      console.error("Load changelog error:", e);
+    } finally {
+      isLoadingChangelog = false;
+    }
+  }
+
+  async function handleClearChangelog() {
+    try {
+      await invoke("clear_changelog");
+      changelogEntries = [];
+    } catch (e) {
+      alert("Lỗi xóa nhật ký: " + String(e));
+    }
+  }
+
+  async function handleExecuteModalImport() {
+    if (!appStore.modal || !appStore.modal.sourcePath) return;
+    if (!importProfileName.trim()) {
+      alert("Vui lòng đặt tên hồ sơ.");
+      return;
+    }
+    isExecutingImport = true;
+    try {
+      const s = await invoke("import_profile", {
+        version: importVersion || appStore.state.selectedVersion,
+        profileName: importProfileName.trim(),
+        sourcePath: appStore.modal.sourcePath,
+        importPlugins,
+        importShortcuts,
+        importToolbars,
+        importMaterials,
+        importTemplates,
+        applyImmediately: importApplyImmediately,
+      });
+      appStore.state = s;
+      await loadProfileComponents();
+      closeModal();
+      alert(t("importSuccess"));
+    } catch (e) {
+      alert("Lỗi nhập hồ sơ: " + String(e));
+    } finally {
+      isExecutingImport = false;
+    }
+  }
 
   function closeModal() {
     appStore.modal = null;
@@ -226,7 +322,7 @@
   <!-- Overlay Backdrop -->
   <div class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-3">
     <!-- Modal Container -->
-    <div class="bg-[#ffffff] dark:bg-[#0a0a0d] border border-[#cbd5e1] dark:border-[#222228] rounded-xl shadow-2xl w-full {appStore.modal?.type === 'view_profile' ? 'max-w-[560px] max-h-[360px]' : 'max-w-[400px] max-h-[380px]'} overflow-hidden flex flex-col animate-in fade-in duration-100">
+    <div class="bg-[#ffffff] dark:bg-[#0a0a0d] border border-[#cbd5e1] dark:border-[#222228] rounded-xl shadow-2xl w-full {appStore.modal?.type === 'view_profile' || appStore.modal?.type === 'changelog' ? 'max-w-[650px] max-h-[420px] h-[420px]' : appStore.modal?.type === 'import_profile_modal' ? 'max-w-[460px] max-h-[400px]' : 'max-w-[400px] max-h-[380px]'} overflow-hidden flex flex-col animate-in fade-in duration-100">
       
       <!-- 1. Create Profile Modal -->
       {#if appStore.modal.type === "create_profile" || appStore.modal.type === "save"}
@@ -609,7 +705,7 @@
             </button>
           </div>
 
-          <!-- Navigation Subtabs (Tiện ích & Phím tắt) + Search -->
+          <!-- Navigation Subtabs (Tiện ích & Phím tắt) + View Mode + Search -->
           <div class="flex items-center space-x-2 pt-2.5 pb-2 border-b border-[#e2e8f0] dark:border-[#1e1e24] shrink-0">
             <button
               type="button"
@@ -639,16 +735,48 @@
               {/if}
             </button>
 
-            <!-- Search box -->
-            <div class="relative flex-1 ml-1">
-              <input
-                type="text"
-                bind:value={searchKeyword}
-                placeholder="Tìm kiếm..."
-                class="w-full bg-[#f8fafc] dark:bg-[#141417] border border-[#cbd5e1] dark:border-[#2b2b34] rounded-lg pl-6 pr-2 py-1 text-xs text-[#0f172a] dark:text-[#ffffff] focus:outline-none focus:border-[#00c8ff]"
-              />
-              <MagnifyingGlass size={11} class="absolute left-2 top-2 text-[#94a3b8]" />
-            </div>
+            {#if viewTab === "shortcuts"}
+              <!-- Toggle Switch: List vs Keyboard -->
+              <div class="flex items-center p-0.5 rounded-lg bg-[#f1f5f9] dark:bg-[#151518] border border-[#cbd5e1] dark:border-[#222228] shrink-0 ml-1">
+                <button
+                  type="button"
+                  onclick={() => (shortcutViewMode = "list")}
+                  class="flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer {shortcutViewMode === 'list'
+                    ? 'bg-white dark:bg-[#202028] text-sky-600 dark:text-[#00c8ff] shadow-xs'
+                    : 'text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0f172a] dark:hover:text-white'}"
+                  title="Xem dạng danh sách"
+                >
+                  <ListDashes size={11} weight="bold" />
+                  <span>Danh sách</span>
+                </button>
+                <button
+                  type="button"
+                  onclick={() => (shortcutViewMode = "keyboard")}
+                  class="flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer {shortcutViewMode === 'keyboard'
+                    ? 'bg-white dark:bg-[#202028] text-sky-600 dark:text-[#00c8ff] shadow-xs'
+                    : 'text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0f172a] dark:hover:text-white'}"
+                  title="Xem dạng bàn phím trực quan"
+                >
+                  <Keyboard size={11} weight="bold" />
+                  <span>Bàn phím</span>
+                </button>
+              </div>
+            {/if}
+
+            <!-- Search box (only when in plugins tab or shortcuts list mode) -->
+            {#if viewTab === "plugins" || (viewTab === "shortcuts" && shortcutViewMode === "list")}
+              <div class="relative flex-1 ml-1">
+                <input
+                  type="text"
+                  bind:value={searchKeyword}
+                  placeholder="Tìm kiếm..."
+                  class="w-full bg-[#f8fafc] dark:bg-[#141417] border border-[#cbd5e1] dark:border-[#2b2b34] rounded-lg pl-6 pr-2 py-1 text-xs text-[#0f172a] dark:text-[#ffffff] focus:outline-none focus:border-[#00c8ff]"
+                />
+                <MagnifyingGlass size={11} class="absolute left-2 top-2 text-[#94a3b8]" />
+              </div>
+            {:else}
+              <div class="flex-1"></div>
+            {/if}
           </div>
 
           <!-- Body Content Area -->
@@ -674,16 +802,7 @@
                   {#each filteredPlugins as p}
                     <div class="flex items-center justify-between p-2 rounded-lg bg-[#f8fafc] dark:bg-[#121216] border border-[#e2e8f0] dark:border-[#1e1e24]">
                       <div class="flex items-center space-x-2 truncate">
-                        {#if p.iconData}
-                          <img
-                            src={p.iconData}
-                            alt=""
-                            class="w-4 h-4 object-contain rounded shrink-0"
-                            loading="lazy"
-                          />
-                        {:else}
-                          <PuzzlePiece size={13} weight="bold" class="text-sky-600 dark:text-[#00c8ff] shrink-0" />
-                        {/if}
+                        <LazyPluginIcon iconData={p.iconData} name={p.name} />
                         <span class="text-xs font-semibold truncate text-[#0f172a] dark:text-[#fafafa]">{p.name}</span>
                       </div>
                       {#if p.isExcluded}
@@ -696,39 +815,271 @@
                 </div>
               {/if}
             {:else if viewTab === "shortcuts"}
-              <!-- Shortcuts List -->
-              {@const filteredShortcuts = profileDetails.customShortcuts.filter(s => s.command.toLowerCase().includes(searchKeyword.toLowerCase()) || s.keyDisplay.toLowerCase().includes(searchKeyword.toLowerCase()))}
-              {#if filteredShortcuts.length === 0}
-                <div class="h-full flex flex-col items-center justify-center text-xs text-[#64748b] dark:text-[#a1a1aa] space-y-1">
-                  <span>Trống</span>
-                  <span class="text-[10px]">Không có phím tắt tùy chỉnh nào khác bản gốc</span>
+              {#if shortcutViewMode === "keyboard"}
+                <!-- Keyboard Layout Visualization -->
+                <KeyboardVisualizer
+                  shortcuts={profileDetails.allShortcuts?.length ? profileDetails.allShortcuts : profileDetails.customShortcuts}
+                  plugins={profileDetails.plugins}
+                />
+              {:else}
+                <!-- Shortcuts List -->
+                {@const filteredShortcuts = profileDetails.customShortcuts.filter(s => s.command.toLowerCase().includes(searchKeyword.toLowerCase()) || s.keyDisplay.toLowerCase().includes(searchKeyword.toLowerCase()))}
+                {#if filteredShortcuts.length === 0}
+                  <div class="h-full flex flex-col items-center justify-center text-xs text-[#64748b] dark:text-[#a1a1aa] space-y-1">
+                    <span>Trống</span>
+                    <span class="text-[10px]">Không có phím tắt tùy chỉnh nào khác bản gốc</span>
+                  </div>
+                {:else}
+                  <div class="space-y-1.5">
+                    {#each filteredShortcuts as s}
+                      <div class="flex items-center justify-between p-2 rounded-lg bg-[#f8fafc] dark:bg-[#121216] border border-[#e2e8f0] dark:border-[#1e1e24]">
+                        <div class="flex items-center space-x-2 truncate flex-1 mr-2">
+                          <span class="px-2 py-0.5 rounded bg-sky-500/15 text-sky-600 dark:text-[#00c8ff] font-mono font-bold text-[10px] border border-sky-500/30 shrink-0">
+                            {s.keyDisplay}
+                          </span>
+                          <span class="text-xs text-[#0f172a] dark:text-[#e4e4e7] truncate" title={s.command}>
+                            {s.command}
+                          </span>
+                        </div>
+                        {#if s.originalKey}
+                          <span class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shrink-0 font-medium">
+                            Đổi phím (Gốc: {s.originalKey})
+                          </span>
+                        {:else}
+                          <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0 font-medium">
+                            Thêm mới
+                          </span>
+                        {/if}
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+              {/if}
+            {/if}
+          </div>
+        </div>
+      {:else if appStore.modal.type === "changelog"}
+        <!-- 8. Changelog Modal -->
+        <div class="p-4 flex flex-col h-full overflow-hidden space-y-3">
+          <!-- Header -->
+          <div class="flex items-center justify-between pb-2 border-b border-[#e2e8f0] dark:border-[#1e1e24] shrink-0">
+            <div class="flex items-center space-x-2">
+              <ClockCounterClockwise size={15} weight="bold" class="text-sky-600 dark:text-[#00c8ff]" />
+              <span class="text-xs font-bold text-[#0f172a] dark:text-[#fafafa]">{t("changelogHeading")}</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <button
+                onclick={loadChangelogData}
+                class="flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-[#18181c] dark:hover:bg-[#222228] border border-slate-300 dark:border-[#27272f] text-slate-700 dark:text-[#d4d4d8] cursor-pointer"
+                title={t("scanLiveBtn")}
+              >
+                <ArrowsClockwise size={11} class={isLoadingChangelog ? 'animate-spin' : ''} />
+                <span>{t("scanLiveBtn")}</span>
+              </button>
+              {#if changelogEntries.length > 0}
+                <button
+                  onclick={handleClearChangelog}
+                  class="flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 cursor-pointer"
+                  title={t("clearChangelogBtn")}
+                >
+                  <Trash size={11} />
+                  <span>{t("clearChangelogBtn")}</span>
+                </button>
+              {/if}
+              <button onclick={closeModal} class="text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0f172a] dark:hover:text-white cursor-pointer" title="Đóng">
+                <X size={14} weight="bold" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Body Container -->
+          <div class="flex-1 overflow-y-auto space-y-3 min-h-0 pr-1">
+            <!-- Live Session Status Card -->
+            <div class="p-2.5 rounded-lg border {liveDiff?.hasChanges ? 'bg-amber-500/5 border-amber-500/30' : 'bg-slate-50 dark:bg-[#121215] border-slate-200 dark:border-[#1e1e24]'}">
+              <div class="flex items-center justify-between pb-1.5 border-b border-slate-200/60 dark:border-[#1e1e24]">
+                <div class="flex items-center space-x-2">
+                  <span class="text-[11px] font-bold text-slate-700 dark:text-[#e4e4e7]">{t("liveStatusHeading")}:</span>
+                  <span class="text-[11px] font-semibold text-sky-600 dark:text-[#00c8ff] bg-sky-500/10 px-1.5 py-0.2 rounded border border-sky-500/20">
+                    {liveDiff?.activeProfile || "Default"}
+                  </span>
+                </div>
+                {#if liveDiff?.hasChanges}
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                    {t("liveDetected")}
+                  </span>
+                {:else}
+                  <span class="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center space-x-1">
+                    <CheckCircle size={11} weight="fill" />
+                    <span>{t("liveNoChanges")}</span>
+                  </span>
+                {/if}
+              </div>
+
+              {#if liveDiff?.hasChanges}
+                <div class="pt-2 space-y-1.5">
+                  {#if liveDiff.addedPlugins.length > 0}
+                    <div class="flex items-start space-x-1 text-[11px]">
+                      <span class="text-emerald-600 dark:text-emerald-400 font-bold shrink-0">+ Thêm mới ({liveDiff.addedPlugins.length}):</span>
+                      <div class="flex flex-wrap gap-1">
+                        {#each liveDiff.addedPlugins as p}
+                          <span class="px-1.5 py-0.2 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-mono text-[10px]">
+                            {p}
+                          </span>
+                        {/each}
+                      </div>
+                    </div>
+                  {/if}
+                  {#if liveDiff.removedPlugins.length > 0}
+                    <div class="flex items-start space-x-1 text-[11px]">
+                      <span class="text-rose-600 dark:text-rose-400 font-bold shrink-0">- Đã xóa ({liveDiff.removedPlugins.length}):</span>
+                      <div class="flex flex-wrap gap-1">
+                        {#each liveDiff.removedPlugins as p}
+                          <span class="px-1.5 py-0.2 rounded bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 font-mono text-[10px]">
+                            {p}
+                          </span>
+                        {/each}
+                      </div>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+
+            <!-- Timeline History List -->
+            <div class="space-y-2">
+              <span class="text-[11px] font-bold text-slate-600 dark:text-[#a1a1aa] block">{t("historyHeading")} ({changelogEntries.length})</span>
+
+              {#if changelogEntries.length === 0}
+                <div class="flex flex-col items-center justify-center py-8 text-slate-400 dark:text-[#71717a]">
+                  <ClockCounterClockwise size={24} weight="duotone" class="mb-1 text-slate-400" />
+                  <span class="text-xs font-semibold">{t("emptyChangelog")}</span>
                 </div>
               {:else}
-                <div class="space-y-1.5">
-                  {#each filteredShortcuts as s}
-                    <div class="flex items-center justify-between p-2 rounded-lg bg-[#f8fafc] dark:bg-[#121216] border border-[#e2e8f0] dark:border-[#1e1e24]">
-                      <div class="flex items-center space-x-2 truncate flex-1 mr-2">
-                        <span class="px-2 py-0.5 rounded bg-sky-500/15 text-sky-600 dark:text-[#00c8ff] font-mono font-bold text-[10px] border border-sky-500/30 shrink-0">
-                          {s.keyDisplay}
-                        </span>
-                        <span class="text-xs text-[#0f172a] dark:text-[#e4e4e7] truncate" title={s.command}>
-                          {s.command}
-                        </span>
+                <div class="space-y-2">
+                  {#each changelogEntries as entry}
+                    <div class="p-2.5 rounded-lg bg-[#f8fafc] dark:bg-[#121216] border border-[#e2e8f0] dark:border-[#1e1e24] space-y-1.5 text-xs">
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                          <span class="font-bold text-slate-800 dark:text-white">{entry.profile}</span>
+                          <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-200 dark:bg-[#202028] text-slate-600 dark:text-[#a1a1aa] font-medium">
+                            {entry.eventType === 'switch' ? 'Chuyển đổi' : entry.eventType === 'import' ? 'Nhập' : 'Lưu'}
+                          </span>
+                          <span class="text-[10px] text-slate-500 dark:text-[#71717a] font-normal">{entry.details}</span>
+                        </div>
+                        <span class="text-[10px] font-mono text-slate-400 dark:text-[#71717a]">{entry.timestamp}</span>
                       </div>
-                      {#if s.originalKey}
-                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shrink-0 font-medium">
-                          Đổi phím (Gốc: {s.originalKey})
-                        </span>
-                      {:else}
-                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0 font-medium">
-                          Thêm mới
-                        </span>
+
+                      {#if entry.addedPlugins && entry.addedPlugins.length > 0}
+                        <div class="flex items-start space-x-1.5">
+                          <span class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0">+{entry.addedPlugins.length} thêm:</span>
+                          <div class="flex flex-wrap gap-1">
+                            {#each entry.addedPlugins as p}
+                              <span class="px-1.5 py-0.2 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-mono text-[9px]">
+                                {p}
+                              </span>
+                            {/each}
+                          </div>
+                        </div>
+                      {/if}
+
+                      {#if entry.removedPlugins && entry.removedPlugins.length > 0}
+                        <div class="flex items-start space-x-1.5">
+                          <span class="text-[10px] font-bold text-rose-600 dark:text-rose-400 shrink-0">-{entry.removedPlugins.length} xóa:</span>
+                          <div class="flex flex-wrap gap-1">
+                            {#each entry.removedPlugins as p}
+                              <span class="px-1.5 py-0.2 rounded bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 font-mono text-[9px]">
+                                {p}
+                              </span>
+                            {/each}
+                          </div>
+                        </div>
                       {/if}
                     </div>
                   {/each}
                 </div>
               {/if}
-            {/if}
+            </div>
+          </div>
+        </div>
+
+      {:else if appStore.modal.type === "import_profile_modal"}
+        <!-- 9. Import Profile Direct Modal -->
+        {@const analysis = appStore.modal.analysis || {}}
+        <div class="p-4 space-y-3">
+          <div class="flex items-center justify-between pb-2 border-b border-[#e2e8f0] dark:border-[#1e1e24]">
+            <div class="flex items-center space-x-2">
+              <FileArrowUp size={15} weight="bold" class="text-sky-600 dark:text-[#00c8ff]" />
+              <span class="text-xs font-bold text-[#0f172a] dark:text-[#fafafa]">{t("detectedHeading")}</span>
+            </div>
+            <button onclick={closeModal} class="text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0f172a] dark:hover:text-white cursor-pointer" title="Đóng">
+              <X size={14} weight="bold" />
+            </button>
+          </div>
+
+          <div class="space-y-2.5 text-xs">
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-600 dark:text-[#a1a1aa] mb-1" for="modalImportName">
+                  {t("profileNameLabel")}
+                </label>
+                <input
+                  id="modalImportName"
+                  type="text"
+                  bind:value={importProfileName}
+                  class="w-full bg-[#f8fafc] dark:bg-[#141417] border border-slate-300 dark:border-[#27272f] rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-[#ffffff] focus:outline-none focus:border-sky-500 dark:focus:border-[#00c8ff]"
+                />
+              </div>
+
+              <div class="relative z-30">
+                <span class="block text-[10px] font-bold text-slate-600 dark:text-[#a1a1aa] mb-1">
+                  {t("targetVersionLabel")}
+                </span>
+                <CustomDropdown
+                  options={appStore.installedVersions}
+                  value={importVersion}
+                  onchange={(v) => (importVersion = v)}
+                />
+              </div>
+            </div>
+
+            <!-- Components to import -->
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1 pb-1">
+              {#if analysis.hasPlugins}
+                <CustomCheckbox bind:checked={importPlugins} label={`Plugins (${analysis.pluginCount})`} icon={PuzzlePiece} />
+              {/if}
+              {#if analysis.hasShortcuts}
+                <CustomCheckbox bind:checked={importShortcuts} label={t("tagShortcuts")} icon={Keyboard} />
+              {/if}
+              {#if analysis.hasToolbars}
+                <CustomCheckbox bind:checked={importToolbars} label={t("tagToolbars")} icon={Toolbox} />
+              {/if}
+              {#if analysis.hasMaterials}
+                <CustomCheckbox bind:checked={importMaterials} label={t("tagMaterials")} icon={Palette} />
+              {/if}
+              {#if analysis.hasTemplates}
+                <CustomCheckbox bind:checked={importTemplates} label={t("tagTemplates")} icon={FileText} />
+              {/if}
+            </div>
+
+            <div class="pt-1">
+              <CustomCheckbox bind:checked={importApplyImmediately} label={t("applyImmediately")} />
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-[#e2e8f0] dark:border-[#1e1e24] flex items-center justify-end space-x-2">
+            <button
+              onclick={closeModal}
+              class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-[#d4d4d8] hover:bg-slate-100 dark:hover:bg-[#18181c] cursor-pointer"
+            >
+              {t("cancelBtn")}
+            </button>
+            <button
+              onclick={handleExecuteModalImport}
+              disabled={isExecutingImport}
+              class="px-4 py-1.5 rounded-lg text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white shadow-xs cursor-pointer disabled:opacity-50"
+            >
+              {isExecutingImport ? 'Đang nhập...' : t("startImportBtn")}
+            </button>
           </div>
         </div>
       {/if}

@@ -1,9 +1,8 @@
 <script>
-  import { appStore, switchProfile, deleteProfile, t } from "../store.svelte.js";
+  import { appStore, switchProfile, deleteProfile, setBusy, t } from "../store.svelte.js";
   import { invoke } from "@tauri-apps/api/core";
+  import { open } from "@tauri-apps/plugin-dialog";
   import {
-    Play,
-    Stop,
     ArrowsClockwise,
     PencilSimple,
     Eye,
@@ -26,6 +25,14 @@
     Toolbox,
     Palette,
     FileText,
+    ClockCounterClockwise,
+    Funnel,
+    FileArrowUp,
+    FolderOpen,
+    FileZip,
+    CaretDown,
+    MagnifyingGlass,
+    X,
   } from "phosphor-svelte";
 
   const iconMap = {
@@ -47,17 +54,43 @@
   const profilesList = $derived(versionConfig.profiles || []);
   const profilesMetadata = $derived(versionConfig.profilesMetadata || {});
 
-  async function handleActionSketchUp() {
-    if (appStore.sketchupRunning) {
-      await invoke("close_sketchup");
-      appStore.sketchupRunning = false;
-    } else {
-      const ok = await invoke("launch_sketchup", { version: currentVersion });
-      if (!ok) {
-        alert("Không tìm thấy SketchUp.");
-      }
-    }
+  let showFilter = $state(false);
+  let searchQuery = $state("");
+  let activeFilterChip = $state("all"); // 'all' | 'has_plugins' | 'has_shortcuts' | 'active'
+  let isImportMenuOpen = $state(false);
+
+  function getComponentsFor(profile) {
+    return appStore.profileComponents.find((c) => c.name === profile) || {
+      hasPlugins: true,
+      hasShortcuts: true,
+      hasToolbars: false,
+      hasMaterials: false,
+      hasTemplates: false,
+      pluginCount: 0,
+      shortcutCount: 0,
+      createdAt: null,
+      updatedAt: null,
+    };
   }
+
+  const filteredProfiles = $derived(
+    profilesList.filter((p) => {
+      if (searchQuery.trim() && !p.toLowerCase().includes(searchQuery.trim().toLowerCase())) {
+        return false;
+      }
+      const comp = getComponentsFor(p);
+      if (activeFilterChip === "has_plugins" && (!comp.hasPlugins || comp.pluginCount === 0)) {
+        return false;
+      }
+      if (activeFilterChip === "has_shortcuts" && (!comp.hasShortcuts || comp.shortcutCount === 0)) {
+        return false;
+      }
+      if (activeFilterChip === "active" && p !== activeProfile) {
+        return false;
+      }
+      return true;
+    })
+  );
 
   async function handleSwitch(profile) {
     if (appStore.sketchupRunning) {
@@ -89,19 +122,55 @@
     };
   }
 
-  function getComponentsFor(profile) {
-    return appStore.profileComponents.find((c) => c.name === profile) || {
-      hasPlugins: true,
-      hasShortcuts: true,
-      hasToolbars: false,
-      hasMaterials: false,
-      hasTemplates: false,
-    };
+  async function handleSelectFolder() {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "Chọn thư mục dữ liệu SketchUp",
+      });
+      if (selected) {
+        await handleRunImportAnalysis(selected);
+      }
+    } catch (e) {
+      alert("Lỗi mở thư mục: " + String(e));
+    }
+  }
+
+  async function handleSelectZip() {
+    try {
+      const selected = await open({
+        filters: [{ name: "Zip", extensions: ["zip"] }],
+        multiple: false,
+        title: "Chọn tệp Zip hồ sơ SketchUp",
+      });
+      if (selected) {
+        await handleRunImportAnalysis(selected);
+      }
+    } catch (e) {
+      alert("Lỗi mở tệp Zip: " + String(e));
+    }
+  }
+
+  async function handleRunImportAnalysis(sourcePath) {
+    setBusy(true, "Đang quét và phân tích dữ liệu...");
+    try {
+      const res = await invoke("analyze_import_source", { sourcePath });
+      appStore.modal = {
+        type: "import_profile_modal",
+        sourcePath,
+        analysis: res,
+      };
+    } catch (e) {
+      alert("Lỗi phân tích nguồn nhập: " + String(e));
+    } finally {
+      setBusy(false);
+    }
   }
 </script>
 
 <div class="flex flex-col flex-1 h-full space-y-2 overflow-hidden">
-  <!-- Top Combined Action Bar (Active profile info + Launch & Add actions) -->
+  <!-- Top Combined Action Bar -->
   <div class="flex items-center justify-between bg-[#ffffff] dark:bg-[#0c0c0e] p-2 rounded-lg border border-[#e2e8f0] dark:border-[#1e1e24] shrink-0">
     <!-- Left: Active Profile Info & Count -->
     <div class="flex items-center space-x-2">
@@ -120,8 +189,73 @@
       </div>
     </div>
 
-    <!-- Right: Add Profile + Action SketchUp Button -->
+    <!-- Right: Changelog + Filter + Import + Create Profile -->
     <div class="flex items-center space-x-1.5">
+      <!-- Changelog Button -->
+      <button
+        onclick={() => (appStore.modal = { type: "changelog" })}
+        class="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 dark:bg-[#141417] hover:bg-slate-200 dark:hover:bg-[#202026] border border-slate-300 dark:border-[#27272f] rounded-lg text-xs font-semibold text-slate-800 dark:text-[#f4f4f6] transition-colors cursor-pointer"
+        title={t("changelogBtn")}
+      >
+        <ClockCounterClockwise size={13} weight="bold" class="text-sky-600 dark:text-[#00c8ff]" />
+        <span>{t("changelogBtn")}</span>
+      </button>
+
+      <!-- Filter Toggle Button -->
+      <button
+        onclick={() => (showFilter = !showFilter)}
+        class="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer {showFilter
+          ? 'bg-sky-50 dark:bg-sky-500/20 border border-sky-300 dark:border-sky-500/40 text-sky-700 dark:text-sky-300 font-bold'
+          : 'bg-slate-100 dark:bg-[#141417] hover:bg-slate-200 dark:hover:bg-[#202026] border border-slate-300 dark:border-[#27272f] text-slate-800 dark:text-[#f4f4f6]'}"
+        title={t("filterBtn")}
+      >
+        <Funnel size={13} weight={showFilter ? 'fill' : 'bold'} class="text-sky-600 dark:text-[#00c8ff]" />
+        <span>{t("filterBtn")}</span>
+      </button>
+
+      <!-- Import Profile Dropdown -->
+      <div
+        role="group"
+        class="relative inline-block"
+        onmouseenter={() => (isImportMenuOpen = true)}
+        onmouseleave={() => (isImportMenuOpen = false)}
+      >
+        <button
+          onclick={() => (isImportMenuOpen = !isImportMenuOpen)}
+          class="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 dark:bg-[#141417] hover:bg-slate-200 dark:hover:bg-[#202026] border border-slate-300 dark:border-[#27272f] rounded-lg text-xs font-semibold text-slate-800 dark:text-[#f4f4f6] transition-colors cursor-pointer"
+          title={t("importProfileBtn")}
+        >
+          <FileArrowUp size={13} weight="bold" class="text-sky-600 dark:text-[#00c8ff]" />
+          <span>{t("importProfileBtn")}</span>
+          <CaretDown size={10} weight="bold" class="text-slate-500" />
+        </button>
+
+        {#if isImportMenuOpen}
+          <div class="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-[#121216] border border-[#e2e8f0] dark:border-[#262630] rounded-lg shadow-lg z-50 py-1 overflow-hidden">
+            <button
+              onclick={() => {
+                isImportMenuOpen = false;
+                handleSelectFolder();
+              }}
+              class="w-full px-3 py-1.5 flex items-center space-x-2 text-xs font-medium text-slate-700 dark:text-[#d4d4d8] hover:bg-sky-50 dark:hover:bg-[#1c1c24] hover:text-sky-600 dark:hover:text-[#00c8ff] cursor-pointer text-left"
+            >
+              <FolderOpen size={13} class="text-sky-600 dark:text-[#00c8ff]" />
+              <span>{t("importFolderItem")}</span>
+            </button>
+            <button
+              onclick={() => {
+                isImportMenuOpen = false;
+                handleSelectZip();
+              }}
+              class="w-full px-3 py-1.5 flex items-center space-x-2 text-xs font-medium text-slate-700 dark:text-[#d4d4d8] hover:bg-sky-50 dark:hover:bg-[#1c1c24] hover:text-sky-600 dark:hover:text-[#00c8ff] cursor-pointer text-left"
+            >
+              <FileZip size={13} class="text-sky-600 dark:text-[#00c8ff]" />
+              <span>{t("importZipItem")}</span>
+            </button>
+          </div>
+        {/if}
+      </div>
+
       <!-- Add Profile Button (+) -->
       <button
         onclick={handleOpenCreateModal}
@@ -131,29 +265,59 @@
         <Plus size={13} weight="bold" class="text-sky-600 dark:text-[#00c8ff]" />
         <span>{t("addProfile")}</span>
       </button>
-
-      <!-- Launch / Force Close SketchUp Button (High contrast, dynamic state) -->
-      <button
-        onclick={handleActionSketchUp}
-        class="flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer {appStore.sketchupRunning
-          ? 'bg-rose-600 hover:bg-rose-500 text-white'
-          : 'bg-sky-600 hover:bg-sky-500 text-white'}"
-      >
-        {#if appStore.sketchupRunning}
-          <Stop size={12} weight="fill" />
-          <span>{t("killSu")}</span>
-        {:else}
-          <Play size={12} weight="fill" />
-          <span>{t("launchSu")}</span>
-        {/if}
-      </button>
     </div>
   </div>
+
+  <!-- Dynamic Filter Bar (Appears when Filter button is active) -->
+  {#if showFilter}
+    <div class="bg-[#ffffff] dark:bg-[#0c0c0e] p-2 rounded-lg border border-[#e2e8f0] dark:border-[#1e1e24] flex items-center space-x-2 shrink-0">
+      <!-- Search Input -->
+      <div class="relative flex-1">
+        <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+          <MagnifyingGlass size={13} weight="bold" />
+        </div>
+        <input
+          type="text"
+          bind:value={searchQuery}
+          placeholder={t("filterPlaceholder")}
+          class="w-full bg-[#f8fafc] dark:bg-[#141418] border border-slate-300 dark:border-[#24242e] rounded-md pl-8 pr-7 py-1 text-xs text-slate-900 dark:text-[#f4f4f6] placeholder-slate-400 focus:outline-none focus:border-sky-500"
+        />
+        {#if searchQuery}
+          <button
+            onclick={() => (searchQuery = "")}
+            class="absolute inset-y-0 right-0 pr-2 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+          >
+            <X size={12} weight="bold" />
+          </button>
+        {/if}
+      </div>
+
+      <!-- Quick Filter Chips -->
+      <div class="flex items-center space-x-1 shrink-0">
+        {#each [
+          { id: 'all', label: t('filterAll') },
+          { id: 'has_plugins', label: t('filterHasPlugins') },
+          { id: 'has_shortcuts', label: t('filterHasShortcuts') },
+          { id: 'active', label: t('filterActive') }
+        ] as chip}
+          {@const isSelected = activeFilterChip === chip.id}
+          <button
+            onclick={() => (activeFilterChip = chip.id)}
+            class="px-2 py-0.5 rounded text-[11px] transition-colors cursor-pointer {isSelected
+              ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 font-bold'
+              : 'bg-slate-100 dark:bg-[#18181e] text-slate-600 dark:text-[#a1a1aa] hover:bg-slate-200 dark:hover:bg-[#202026] border border-transparent font-medium'}"
+          >
+            {chip.label}
+          </button>
+        {/each}
+      </div>
+    </div>
+  {/if}
 
   <!-- Profiles List Container (Flex-1 expands dynamically with window height) -->
   <div class="flex-1 bg-[#ffffff] dark:bg-[#0a0a0c] border border-[#e2e8f0] dark:border-[#1e1e24] rounded-lg overflow-hidden flex flex-col min-h-0">
     <div class="flex-1 overflow-y-auto divide-y divide-[#e2e8f0] dark:divide-[#1a1a20]">
-      {#each profilesList as profile}
+      {#each filteredProfiles as profile}
         {@const isActive = profile === activeProfile}
         {@const comp = getComponentsFor(profile)}
         {@const meta = profilesMetadata[profile] || {}}
@@ -180,6 +344,17 @@
                   <Check size={10} weight="bold" />
                 </span>
               {/if}
+
+              <!-- Timestamps (Created & Updated) -->
+              <div class="flex items-center space-x-1.5 text-[10px] text-slate-400 dark:text-[#71717a] font-normal pl-2">
+                {#if comp.createdAt}
+                  <span>{t("createdLabel")}: {comp.createdAt}</span>
+                {/if}
+                {#if comp.updatedAt}
+                  <span>•</span>
+                  <span>{t("updatedLabel")}: {comp.updatedAt}</span>
+                {/if}
+              </div>
             </div>
 
             <!-- Profile Components Pills (Icons & High Contrast) -->
@@ -187,13 +362,13 @@
               {#if comp.hasPlugins}
                 <span class="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-[#141418] text-slate-700 dark:text-[#d4d4d8] border border-slate-300 dark:border-[#222228] font-medium">
                   <PuzzlePiece size={10} weight="bold" class="text-sky-600 dark:text-[#00c8ff]" />
-                  <span>{t("tagPlugins")}</span>
+                  <span>{t("tagPlugins")} {comp.pluginCount ? `(${comp.pluginCount})` : ''}</span>
                 </span>
               {/if}
               {#if comp.hasShortcuts}
                 <span class="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-[#141418] text-slate-700 dark:text-[#d4d4d8] border border-slate-300 dark:border-[#222228] font-medium">
                   <Keyboard size={10} weight="bold" class="text-sky-600 dark:text-[#00c8ff]" />
-                  <span>{t("tagShortcuts")}</span>
+                  <span>{t("tagShortcuts")} {comp.shortcutCount ? `(${comp.shortcutCount})` : ''}</span>
                 </span>
               {/if}
               {#if comp.hasToolbars}
@@ -257,6 +432,13 @@
           </div>
         </div>
       {/each}
+
+      {#if filteredProfiles.length === 0}
+        <div class="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-[#71717a]">
+          <MagnifyingGlass size={26} weight="duotone" class="mb-2 text-slate-400" />
+          <span class="text-xs font-semibold">{t("noProfilesMatch")}</span>
+        </div>
+      {/if}
     </div>
   </div>
 </div>

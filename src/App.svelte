@@ -10,8 +10,22 @@
   import Modal from "./lib/components/Modal.svelte";
   import SaveWindow from "./lib/components/SaveWindow.svelte";
   import CustomDropdown from "./lib/components/CustomDropdown.svelte";
+  import { Play, Stop } from "phosphor-svelte";
+  import { invoke } from "@tauri-apps/api/core";
 
   const isSaveMode = window.location.search.includes("mode=save");
+
+  async function handleActionSketchUp() {
+    if (appStore.sketchupRunning) {
+      await invoke("close_sketchup");
+      appStore.sketchupRunning = false;
+    } else {
+      const ok = await invoke("launch_sketchup", { version: appStore.state.selectedVersion });
+      if (!ok) {
+        alert("Không tìm thấy SketchUp.");
+      }
+    }
+  }
 
   onMount(() => {
     if (isSaveMode) return;
@@ -75,8 +89,24 @@
     <div class="px-3.5 pt-2 pb-2 flex items-center justify-between border-b border-[#e2e8f0] dark:border-[#18181b] bg-[#ffffff] dark:bg-[#050507]">
       <NavTabs />
 
-      <!-- SketchUp Version Dropdown (Global switcher across all tabs) -->
-      <div class="relative z-30">
+      <!-- Right Controls: Launch/Close SketchUp + Version Dropdown -->
+      <div class="flex items-center space-x-2 relative z-30">
+        <button
+          onclick={handleActionSketchUp}
+          class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer {appStore.sketchupRunning
+            ? 'bg-rose-600 hover:bg-rose-500 text-white'
+            : 'bg-sky-600 hover:bg-sky-500 text-white'}"
+          title={appStore.sketchupRunning ? t("killSu") : t("launchSu")}
+        >
+          {#if appStore.sketchupRunning}
+            <Stop size={13} weight="fill" />
+            <span>{t("killSu")}</span>
+          {:else}
+            <Play size={13} weight="fill" />
+            <span>{t("launchSu")}</span>
+          {/if}
+        </button>
+
         <CustomDropdown
           options={appStore.installedVersions}
           value={appStore.state.selectedVersion}

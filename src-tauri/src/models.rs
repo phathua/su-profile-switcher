@@ -9,6 +9,10 @@ pub struct ProfileMetadata {
     pub color: Option<String>,
     #[serde(default)]
     pub shortcut: Option<String>,
+    #[serde(rename = "createdAt", default)]
+    pub created_at: Option<String>,
+    #[serde(rename = "updatedAt", default)]
+    pub updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,6 +120,41 @@ pub struct ProfileComponents {
     pub has_materials: bool,
     #[serde(rename = "hasTemplates")]
     pub has_templates: bool,
+    #[serde(rename = "pluginCount", default)]
+    pub plugin_count: usize,
+    #[serde(rename = "shortcutCount", default)]
+    pub shortcut_count: usize,
+    #[serde(rename = "createdAt", default)]
+    pub created_at: Option<String>,
+    #[serde(rename = "updatedAt", default)]
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChangelogEntry {
+    pub id: String,
+    pub timestamp: String,
+    pub version: String,
+    pub profile: String,
+    #[serde(rename = "eventType")]
+    pub event_type: String,
+    #[serde(rename = "addedPlugins")]
+    pub added_plugins: Vec<String>,
+    #[serde(rename = "removedPlugins")]
+    pub removed_plugins: Vec<String>,
+    pub details: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LiveDiff {
+    #[serde(rename = "activeProfile")]
+    pub active_profile: String,
+    #[serde(rename = "addedPlugins")]
+    pub added_plugins: Vec<String>,
+    #[serde(rename = "removedPlugins")]
+    pub removed_plugins: Vec<String>,
+    #[serde(rename = "hasChanges")]
+    pub has_changes: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -194,6 +233,8 @@ pub struct ProfileDetails {
     pub plugins: Vec<PluginItem>,
     #[serde(rename = "customShortcuts")]
     pub custom_shortcuts: Vec<ShortcutItem>,
+    #[serde(rename = "allShortcuts", default)]
+    pub all_shortcuts: Vec<ShortcutItem>,
     #[serde(rename = "totalShortcutsCount")]
     pub total_shortcuts_count: usize,
     #[serde(rename = "defaultShortcutsCount")]

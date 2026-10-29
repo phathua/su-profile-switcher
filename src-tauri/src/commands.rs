@@ -1,6 +1,6 @@
 use tauri::{Emitter, State};
-use crate::models::{AppState, ImportAnalysis, ProfileComponents, ProfileDetails, UpdateInfo};
-use crate::{engine, hash, process, updater, AppStateWrapper};
+use crate::models::{AppState, ChangelogEntry, ImportAnalysis, LiveDiff, ProfileComponents, ProfileDetails, UpdateInfo};
+use crate::{changelog, engine, hash, process, updater, AppStateWrapper};
 
 #[tauri::command]
 pub fn get_app_state(state_wrap: State<'_, AppStateWrapper>) -> AppState {
@@ -293,4 +293,20 @@ pub fn import_profile(
 #[tauri::command]
 pub fn open_save_dialog(app: tauri::AppHandle) {
     crate::tray::open_save_dialog(&app);
+}
+
+#[tauri::command]
+pub fn get_changelog() -> Vec<ChangelogEntry> {
+    changelog::load_changelog()
+}
+
+#[tauri::command]
+pub fn get_live_changelog(version: String, state_wrap: State<'_, AppStateWrapper>) -> LiveDiff {
+    let state = state_wrap.0.lock().unwrap();
+    changelog::get_live_diff(&version, &state)
+}
+
+#[tauri::command]
+pub fn clear_changelog() -> Result<(), String> {
+    changelog::clear_changelog()
 }

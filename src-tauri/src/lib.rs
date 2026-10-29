@@ -1,3 +1,4 @@
+pub mod changelog;
 pub mod cli;
 pub mod commands;
 pub mod engine;
@@ -77,7 +78,10 @@ pub fn run() {
             commands::import_profile,
             commands::open_save_dialog,
             commands::get_profile_details,
-            commands::apply_update_and_restart
+            commands::apply_update_and_restart,
+            commands::get_changelog,
+            commands::get_live_changelog,
+            commands::clear_changelog
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
