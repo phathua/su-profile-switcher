@@ -1208,15 +1208,11 @@
 
           <!-- Select all toolbar -->
           <div class="flex items-center justify-between px-1 py-1 text-xs border-b border-[#e2e8f0] dark:border-[#1e1e24]">
-            <label class="flex items-center space-x-2 cursor-pointer font-semibold text-slate-700 dark:text-[#d4d4d8]">
-              <input
-                type="checkbox"
-                checked={batchImportItems.length > 0 && batchImportItems.every(i => i.selected)}
-                onchange={(e) => toggleAllBatchImport(e.currentTarget.checked)}
-                class="rounded accent-sky-500 w-3.5 h-3.5 cursor-pointer"
-              />
-              <span>{t("selectAll")} ({batchImportItems.filter(i => i.selected).length}/{batchImportItems.length})</span>
-            </label>
+            <CustomCheckbox
+              checked={batchImportItems.length > 0 && batchImportItems.every(i => i.selected)}
+              label={`${t("selectAll")} (${batchImportItems.filter(i => i.selected).length}/${batchImportItems.length})`}
+              onchange={(checked) => toggleAllBatchImport(checked)}
+            />
           </div>
 
           <!-- Profiles list -->
@@ -1224,11 +1220,7 @@
             {#each batchImportItems as item, idx}
               <div class="p-2.5 rounded-lg border transition-colors {item.selected ? 'bg-sky-500/5 dark:bg-[#131722] border-sky-500/30' : 'bg-slate-50 dark:bg-[#121216] border-[#e2e8f0] dark:border-[#1e1e24] opacity-60'} space-y-2">
                 <div class="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    bind:checked={item.selected}
-                    class="rounded accent-sky-500 w-3.5 h-3.5 cursor-pointer"
-                  />
+                  <CustomCheckbox bind:checked={item.selected} />
                   <div class="flex-1 flex items-center space-x-2">
                     <span class="text-xs font-bold text-slate-800 dark:text-white shrink-0">{item.name}</span>
                     <span class="text-[10px] text-slate-400">→</span>
@@ -1244,36 +1236,21 @@
 
                 <!-- Selective component checkboxes for this profile -->
                 {#if item.selected}
-                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1 pl-5 text-[11px] text-slate-600 dark:text-slate-300">
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-[11px] text-slate-600 dark:text-slate-300">
                     {#if item.hasPlugins}
-                      <label class="inline-flex items-center gap-1 cursor-pointer">
-                        <input type="checkbox" bind:checked={item.importPlugins} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
-                        <span>Plugins ({item.pluginCount})</span>
-                      </label>
+                      <CustomCheckbox bind:checked={item.importPlugins} label={`Plugins (${item.pluginCount})`} icon={PuzzlePiece} />
                     {/if}
                     {#if item.hasShortcuts}
-                      <label class="inline-flex items-center gap-1 cursor-pointer">
-                        <input type="checkbox" bind:checked={item.importShortcuts} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
-                        <span>Phím tắt</span>
-                      </label>
+                      <CustomCheckbox bind:checked={item.importShortcuts} label={t("tagShortcuts")} icon={Keyboard} />
                     {/if}
                     {#if item.hasToolbars}
-                      <label class="inline-flex items-center gap-1 cursor-pointer">
-                        <input type="checkbox" bind:checked={item.importToolbars} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
-                        <span>Thanh công cụ</span>
-                      </label>
+                      <CustomCheckbox bind:checked={item.importToolbars} label={t("tagToolbars")} icon={Toolbox} />
                     {/if}
                     {#if item.hasMaterials}
-                      <label class="inline-flex items-center gap-1 cursor-pointer">
-                        <input type="checkbox" bind:checked={item.importMaterials} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
-                        <span>Vật liệu</span>
-                      </label>
+                      <CustomCheckbox bind:checked={item.importMaterials} label={t("tagMaterials")} icon={Palette} />
                     {/if}
                     {#if item.hasTemplates}
-                      <label class="inline-flex items-center gap-1 cursor-pointer">
-                        <input type="checkbox" bind:checked={item.importTemplates} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
-                        <span>Mẫu</span>
-                      </label>
+                      <CustomCheckbox bind:checked={item.importTemplates} label={t("tagTemplates")} icon={FileText} />
                     {/if}
                   </div>
                 {/if}

@@ -7,7 +7,19 @@
     value = "",
     onchange = () => {},
     placeholder = "Chọn...",
+    class: customClass = "",
   } = $props();
+
+  const currentOption = $derived(
+    options.find((o) => (typeof o === "string" ? o : o.value) === value)
+  );
+  const displayLabel = $derived(
+    currentOption
+      ? typeof currentOption === "string"
+        ? currentOption
+        : currentOption.label
+      : value || placeholder
+  );
 
   let isOpen = $state(false);
   let dropdownRef = $state(null);
@@ -68,9 +80,9 @@
   <button
     type="button"
     onclick={toggle}
-    class="flex items-center justify-between space-x-2 bg-white dark:bg-[#0c0c0e] hover:bg-slate-50 dark:hover:bg-[#141417] border border-slate-300 dark:border-[#222228] hover:border-slate-400 dark:hover:border-[#383842] text-slate-800 dark:text-[#fafafa] px-2.5 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-sky-500 dark:focus:ring-[#00c8ff]"
+    class="flex items-center justify-between space-x-2 bg-white dark:bg-[#0c0c0e] hover:bg-slate-50 dark:hover:bg-[#141417] border border-slate-300 dark:border-[#222228] hover:border-slate-400 dark:hover:border-[#383842] text-slate-800 dark:text-[#fafafa] px-2.5 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-sky-500 dark:focus:ring-[#00c8ff] {customClass}"
   >
-    <span class="truncate">{value || placeholder}</span>
+    <span class="truncate">{displayLabel}</span>
     <CaretDown size={11} weight="bold" class="text-slate-400 dark:text-[#a1a1aa] shrink-0 transition-transform duration-200 {isOpen ? 'rotate-180' : ''}" />
   </button>
 

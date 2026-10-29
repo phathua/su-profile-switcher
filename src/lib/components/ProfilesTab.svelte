@@ -3,6 +3,7 @@
   import { appStore, switchProfile, deleteProfile, setBusy, t } from "../store.svelte.js";
   import { invoke } from "@tauri-apps/api/core";
   import { open } from "@tauri-apps/plugin-dialog";
+  import CustomDropdown from "./CustomDropdown.svelte";
   import {
     ArrowsClockwise,
     PencilSimple,
@@ -63,6 +64,16 @@
   let sortBy = $state("created_desc");
   let isImportMenuOpen = $state(false);
   let activeRowMenu = $state(null);
+
+  const sortOptions = $derived([
+    { value: "created_desc", label: t("sortCreatedDesc") },
+    { value: "created_asc", label: t("sortCreatedAsc") },
+    { value: "updated_desc", label: t("sortUpdatedDesc") },
+    { value: "name_asc", label: t("sortNameAsc") },
+    { value: "name_desc", label: t("sortNameDesc") },
+    { value: "plugins_desc", label: t("sortPluginsDesc") },
+    { value: "shortcuts_desc", label: t("sortShortcutsDesc") },
+  ]);
 
   onMount(() => {
     const handleGlobalClick = (e) => {
@@ -370,20 +381,14 @@
       </div>
 
       <!-- Sort Dropdown Selector -->
-      <div class="flex items-center space-x-1 shrink-0 border-l border-slate-200 dark:border-[#1e1e24] pl-2">
+      <div class="flex items-center space-x-1.5 shrink-0 border-l border-slate-200 dark:border-[#1e1e24] pl-2">
         <span class="text-[11px] text-slate-500 dark:text-[#71717a] font-medium">{t("sortBy")}</span>
-        <select
-          bind:value={sortBy}
-          class="bg-slate-100 dark:bg-[#18181e] border border-slate-300 dark:border-[#24242e] rounded-md px-2 py-0.5 text-[11px] text-slate-800 dark:text-[#e4e4e7] focus:outline-none focus:border-sky-500 cursor-pointer"
-        >
-          <option value="created_desc">{t("sortCreatedDesc")}</option>
-          <option value="created_asc">{t("sortCreatedAsc")}</option>
-          <option value="updated_desc">{t("sortUpdatedDesc")}</option>
-          <option value="name_asc">{t("sortNameAsc")}</option>
-          <option value="name_desc">{t("sortNameDesc")}</option>
-          <option value="plugins_desc">{t("sortPluginsDesc")}</option>
-          <option value="shortcuts_desc">{t("sortShortcutsDesc")}</option>
-        </select>
+        <CustomDropdown
+          options={sortOptions}
+          value={sortBy}
+          onchange={(val) => (sortBy = val)}
+          class="!py-0.5 !px-2 !text-[11px]"
+        />
       </div>
     </div>
   {/if}

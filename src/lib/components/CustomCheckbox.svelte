@@ -8,6 +8,7 @@
     disabled = false,
     icon: Icon = null,
     onchange = null,
+    class: customClass = "",
   } = $props();
 
   function toggle() {
@@ -25,7 +26,7 @@
   {id}
   onclick={toggle}
   {disabled}
-  class="flex items-center space-x-2 group cursor-pointer text-left select-none disabled:opacity-50 disabled:cursor-not-allowed"
+  class="flex items-center space-x-2 group cursor-pointer text-left select-none disabled:opacity-50 disabled:cursor-not-allowed {customClass}"
 >
   <!-- Circular Checkbox UI (Perfect Circle) -->
   <div

@@ -2,6 +2,7 @@
   import { appStore, setBusy, t, loadProfileComponents } from "../store.svelte.js";
   import { save, open } from "@tauri-apps/plugin-dialog";
   import { invoke } from "@tauri-apps/api/core";
+  import CustomCheckbox from "./CustomCheckbox.svelte";
   import {
     Archive,
     FileArrowDown,
@@ -228,15 +229,11 @@
     <div class="flex-1 bg-[#ffffff] dark:bg-[#0c0c0e] border border-[#e2e8f0] dark:border-[#1e1e24] rounded-lg p-3 flex flex-col overflow-hidden">
       <!-- Toolbar: Select all & Export button -->
       <div class="flex items-center justify-between pb-2 border-b border-[#e2e8f0] dark:border-[#1e1e24] shrink-0">
-        <label class="flex items-center space-x-2 cursor-pointer font-semibold text-xs text-slate-700 dark:text-[#d4d4d8]">
-          <input
-            type="checkbox"
-            checked={backupItems.length > 0 && backupItems.every((i) => i.selected)}
-            onchange={(e) => toggleAllBackup(e.currentTarget.checked)}
-            class="rounded accent-sky-500 w-3.5 h-3.5 cursor-pointer"
-          />
-          <span>{t("selectAll")} ({backupItems.filter((i) => i.selected).length}/{backupItems.length})</span>
-        </label>
+        <CustomCheckbox
+          checked={backupItems.length > 0 && backupItems.every((i) => i.selected)}
+          label={`${t("selectAll")} (${backupItems.filter((i) => i.selected).length}/${backupItems.length})`}
+          onchange={(checked) => toggleAllBackup(checked)}
+        />
 
         <button
           type="button"
@@ -263,11 +260,7 @@
             <div class="p-2.5 rounded-lg border transition-all {item.selected ? 'bg-[#f8fafc] dark:bg-[#121216] border-sky-500/30 dark:border-sky-500/20 shadow-2xs' : 'bg-slate-50/50 dark:bg-[#0e0e11] border-[#e2e8f0] dark:border-[#1a1a20] opacity-60'} space-y-2">
               <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-2.5">
-                  <input
-                    type="checkbox"
-                    bind:checked={item.selected}
-                    class="rounded accent-sky-500 w-3.5 h-3.5 cursor-pointer"
-                  />
+                  <CustomCheckbox bind:checked={item.selected} />
                   <div
                     class="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
                     style="background-color: {profileColor}20; color: {profileColor};"
@@ -298,31 +291,11 @@
               <!-- Component Checkboxes for this profile -->
               {#if item.selected}
                 <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 pl-6 pt-1 text-[11px] text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-[#1a1a20]">
-                  <label class="inline-flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" bind:checked={item.includePlugins} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
-                    <PuzzlePiece size={11} class="text-sky-500" />
-                    <span>{t("tagPlugins")}</span>
-                  </label>
-                  <label class="inline-flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" bind:checked={item.includeShortcuts} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
-                    <Keyboard size={11} class="text-sky-500" />
-                    <span>{t("tagShortcuts")}</span>
-                  </label>
-                  <label class="inline-flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" bind:checked={item.includeToolbars} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
-                    <Toolbox size={11} class="text-sky-500" />
-                    <span>{t("tagToolbars")}</span>
-                  </label>
-                  <label class="inline-flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" bind:checked={item.includeMaterials} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
-                    <Palette size={11} class="text-sky-500" />
-                    <span>{t("tagMaterials")}</span>
-                  </label>
-                  <label class="inline-flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" bind:checked={item.includeTemplates} class="rounded accent-sky-500 w-3 h-3 cursor-pointer" />
-                    <FileText size={11} class="text-sky-500" />
-                    <span>{t("tagTemplates")}</span>
-                  </label>
+                  <CustomCheckbox bind:checked={item.includePlugins} label={t("tagPlugins")} icon={PuzzlePiece} />
+                  <CustomCheckbox bind:checked={item.includeShortcuts} label={t("tagShortcuts")} icon={Keyboard} />
+                  <CustomCheckbox bind:checked={item.includeToolbars} label={t("tagToolbars")} icon={Toolbox} />
+                  <CustomCheckbox bind:checked={item.includeMaterials} label={t("tagMaterials")} icon={Palette} />
+                  <CustomCheckbox bind:checked={item.includeTemplates} label={t("tagTemplates")} icon={FileText} />
                 </div>
               {/if}
             </div>
