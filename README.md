@@ -32,8 +32,10 @@
 
 - 🚀 **Siêu nhẹ & Tốc độ tức thì**: Bộ nhớ tiêu thụ cực thấp (~20MB RAM), không phụ thuộc vào .NET Runtime hay Chromium cồng kềnh.
 - 🎨 **Tùy biến Hồ sơ trực quan**: Tự do đổi biểu tượng Phosphor Icons (10 bộ icon chuyên dụng kiến trúc/đồ họa), chọn màu sắc nhận diện và gán tên gợi nhớ.
+- 👁️ **Xem chi tiết hồ sơ**: Xem nhanh danh sách plugin đã cài đặt và so sánh phím tắt tùy chỉnh (tự động so sánh với phím tắt gốc của SketchUp 2026).
+- 💾 **Lưu hồ sơ nhanh từ khay hệ thống**: Hộp thoại lưu nhanh từ System Tray cho phép đặt tên, chọn biểu tượng và màu sắc trực tiếp không cần mở cửa sổ chính.
 - ⌨️ **Phím tắt toàn cục (Global Hotkey)**: Gán tổ hợp phím (ví dụ: `Ctrl+Alt+1`, `Ctrl+Shift+D`) để chuyển đổi hồ sơ ngay lập tức khi đang ở ngoài màn hình desktop hay trong phần mềm khác.
-- 🔔 **Thông báo Windows Native**: Sử dụng trực tiếp hệ thống Windows Toast Notification API của Windows 10/11 với âm thanh và biểu ngữ Action Center chuẩn hệ điều hành.
+- 🔔 **Thông báo Windows Native**: Sử dụng trực tiếp Windows Toast Notification API (WinRT AUMID) chuẩn hệ điều hành với biểu tượng ứng dụng chính thức, âm thanh và hiển thị trong Action Center.
 - 🛡️ **Bảo vệ toàn vẹn dữ liệu**: Tự động phát hiện khi SketchUp đang chạy, đưa ra hộp thoại cảnh báo trước khi sao chép và hỗ trợ nút **Buộc đóng SketchUp** một chạm.
 - 🔍 **Tự động nhận diện đa phiên bản**: Hỗ trợ toàn diện từ SketchUp 2021 đến SketchUp 2026 (quét cả thư mục tiêu chuẩn lẫn cấu trúc thư mục con của Trimble).
 - 🧩 **Bảo vệ Plugin Render độc lập**: Tùy chọn giữ nguyên các plugin render phức tạp (V-Ray, Enscape, D5 Render, Thea Render) tránh lỗi license khi đổi hồ sơ.
@@ -45,11 +47,12 @@
 
 Truy cập trang [**GitHub Releases**](https://github.com/phathua/su-profile-switcher/releases) để tải về phiên bản phù hợp với máy tính của bạn:
 
-- `SuPS-x64-v*.zip`: Dành cho Windows 64-bit tiêu chuẩn (khuyên dùng).
-- `SuPS-x86-v*.zip`: Dành cho Windows 32-bit.
-- `SuPS-arm64-v*.zip`: Dành cho các dòng máy Windows on ARM (Surface Pro Copilot+, Snapdragon X Elite).
+### Gói cài đặt tự động (NSIS Setup - Khuyên dùng)
+- `SuPS-x64-v*-Setup.exe`: Bản cài đặt tự động cho Windows 64-bit tiêu chuẩn.
+- `SuPS-x86-v*-Setup.exe`: Bản cài đặt tự động cho Windows 32-bit.
+- `SuPS-arm64-v*-Setup.exe`: Bản cài đặt tự động cho Windows on ARM (Surface Pro Copilot+, Snapdragon X Elite).
 
-> 💡 **Ứng dụng Portable**: Không cần cài đặt rườm rà. Chỉ cần giải nén file `.zip` và chạy file `.exe`.
+> 💡 **Cài đặt trong AppData**: Trình cài đặt tự động cài vào thư mục `%LOCALAPPDATA%\Programs\SketchUp Profile Switcher` theo quyền người dùng hiện tại, không yêu cầu quyền Quản trị viên (UAC) và hỗ trợ tự động nâng cấp mượt mà.
 
 ---
 
@@ -57,22 +60,25 @@ Truy cập trang [**GitHub Releases**](https://github.com/phathua/su-profile-swi
 
 1. **Chọn phiên bản SketchUp**: Chọn phiên bản bạn đang dùng ở góc phải thanh điều hướng.
 2. **Tạo hồ sơ mới**: Nhấn vào nút `+ Tạo hồ sơ`, đặt tên và chọn các thành phần muốn lưu (Plugins, Phím tắt, Thanh công cụ, Vật liệu, Mẫu template).
-3. **Tùy chỉnh biểu tượng & Phím tắt**: Bấm biểu tượng cây bút tại dòng hồ sơ, chọn icon, màu sắc và bấm tổ hợp phím muốn gán.
-4. **Chuyển đổi hồ sơ**:
+3. **Xem chi tiết hồ sơ**: Bấm nút hình con mắt cạnh hồ sơ để duyệt danh sách plugin đang cài và xem sự khác biệt phím tắt so với bản gốc SketchUp 2026.
+4. **Tùy chỉnh biểu tượng & Phím tắt**: Bấm biểu tượng cây bút tại dòng hồ sơ, chọn icon, màu sắc và bấm tổ hợp phím muốn gán.
+5. **Chuyển đổi hồ sơ**:
    - Nhấn vào biểu tượng chuyển đổi cạnh hồ sơ trong danh sách.
    - Hoặc click chuột phải vào icon ứng dụng dưới khay hệ thống (System Tray).
    - Hoặc bấm trực tiếp phím tắt toàn cục đã gán.
-5. **Chạy & Đóng SketchUp**: Nút ở góc trên sẽ hiển thị `Chạy SketchUp` (màu xanh) khi phần mềm chưa mở, và tự động chuyển thành `Buộc đóng SketchUp` (màu đỏ) khi SketchUp đang chạy.
+6. **Lưu nhanh từ khay**: Click chuột phải vào icon ở khay hệ thống và chọn `Lưu hồ sơ hiện tại...` để mở cửa sổ lưu nhanh có sẵn bộ chọn màu và icon.
+7. **Chạy & Đóng SketchUp**: Nút ở góc trên sẽ hiển thị `Chạy SketchUp` (màu xanh) khi phần mềm chưa mở, và tự động chuyển thành `Buộc đóng SketchUp` (màu đỏ) khi SketchUp đang chạy.
 
 ---
 
 ## 🛠️ Công nghệ phát triển
 
-- **Core Engine**: [Rust](https://www.rust-lang.org/) + [Tauri v2](https://v2.tauri.app/)
+- **Core Engine**: [Rust](https://www.rust-lang.org/) + [Tauri v2](https://v2.tauri.app/) (WinRT Notification, Windows 0.57)
 - **Frontend Framework**: [Svelte 5](https://svelte.dev/) (Runes reactivity)
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
 - **Icon System**: [Phosphor Icons](https://phosphoricons.com/)
-- **CI/CD Pipeline**: GitHub Actions với Node.js 24, tự động phát hành bản build đa kiến trúc kèm nhật ký thay đổi tự động.
+- **Installer**: Gói cài đặt NSIS tự động phân phối theo người dùng (Per-user AppData)
+- **CI/CD Pipeline**: GitHub Actions với Node.js 24, tự động đóng gói đa kiến trúc (x64, x86, arm64) kèm nhật ký thay đổi tự động.
 
 ---
 

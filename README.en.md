@@ -32,8 +32,10 @@
 
 - 🚀 **Blazing Fast & Ultra-Lightweight**: Minimal memory footprint (~20MB RAM), independent of bulky runtimes or full Chromium browsers.
 - 🎨 **Visual Profile Customization**: Freely select Phosphor Icons (curated design & 3D workflow icons), assign accent colors, and manage distinct configurations.
+- 👁️ **Profile Inspector**: Quickly inspect installed plugins and view customized keyboard shortcuts diffed against default SketchUp 2026 shortcuts.
+- 💾 **System Tray Quick-Save**: Save the current workspace directly from the System Tray with an embedded icon and accent color picker without opening the main window.
 - ⌨️ **Global Hotkeys**: Switch profiles from anywhere with registered system-wide shortcuts (e.g., `Ctrl+Alt+1`, `Ctrl+Shift+D`).
-- 🔔 **Windows Native Notifications**: Utilizes native Windows Toast Notification APIs with Action Center banners and audio cues.
+- 🔔 **Windows Native Notifications**: Pure WinRT Toast Notification integration with custom AUMID and application icon branding.
 - 🛡️ **Data Integrity Protection**: Real-time process monitoring detects active SketchUp instances, prompting confirmation and offering single-click **Force Close** protection.
 - 🔍 **Multi-Version Auto Detection**: Seamlessly detects and manages configurations across SketchUp 2021 through SketchUp 2026.
 - 🧩 **Render Plugin Isolation**: Keep render engines (V-Ray, Enscape, D5 Render, Thea Render) intact to avoid licensing and path issues.
@@ -43,13 +45,14 @@
 
 ## 📥 Download & Installation
 
-Grab the latest release from the [**GitHub Releases**](https://github.com/phathua/su-profile-switcher/releases) page:
+Grab the latest installer from the [**GitHub Releases**](https://github.com/phathua/su-profile-switcher/releases) page:
 
-- `SuPS-x64-v*.zip`: Standard 64-bit Windows (Recommended).
-- `SuPS-x86-v*.zip`: 32-bit Windows.
-- `SuPS-arm64-v*.zip`: Windows on ARM (Surface Pro Copilot+, Snapdragon X Elite).
+### Installer Packages (NSIS Setup - Recommended)
+- `SuPS-x64-v*-Setup.exe`: Automated installer for standard 64-bit Windows.
+- `SuPS-x86-v*-Setup.exe`: Automated installer for 32-bit Windows.
+- `SuPS-arm64-v*-Setup.exe`: Automated installer for Windows on ARM (Surface Pro Copilot+, Snapdragon X Elite).
 
-> 💡 **Portable Application**: No setup required. Extract the `.zip` archive and launch the `.exe`.
+> 💡 **AppData User Scope**: Installs by default into `%LOCALAPPDATA%\Programs\SketchUp Profile Switcher` without requiring administrative (UAC) elevation, allowing smooth seamless in-place updates.
 
 ---
 
@@ -57,22 +60,25 @@ Grab the latest release from the [**GitHub Releases**](https://github.com/phathu
 
 1. **Select Version**: Pick your target SketchUp version from the top-right dropdown.
 2. **Create Profile**: Click `+ New Profile`, specify a name, and check target components (Plugins, Shortcuts, Toolbars, Materials, Templates).
-3. **Customize Profile & Hotkeys**: Click the pencil icon on any profile item to choose an icon, color dot, and record a global shortcut.
-4. **Switch Configuration**:
+3. **Inspect Profile**: Click the eye icon next to any profile to inspect installed plugins and shortcut diffs against SketchUp 2026 defaults.
+4. **Customize Profile & Hotkeys**: Click the pencil icon on any profile item to choose an icon, color dot, and record a global shortcut.
+5. **Switch Configuration**:
    - Click the switch icon next to the profile in the list.
    - Or right-click the System Tray icon to switch instantly.
    - Or trigger the assigned global keyboard shortcut.
-5. **Launch / Terminate SketchUp**: The top header button dynamically adapts between `Launch SketchUp` (Sky Blue) and `Force Close SketchUp` (Red) based on the process state.
+6. **Quick Save from Tray**: Right-click the tray icon and select `Lưu hồ sơ hiện tại...` to open the quick-save modal with color and icon selectors.
+7. **Launch / Terminate SketchUp**: The top header button dynamically adapts between `Launch SketchUp` (Sky Blue) and `Force Close SketchUp` (Red) based on the process state.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Core Engine**: [Rust](https://www.rust-lang.org/) + [Tauri v2](https://v2.tauri.app/)
+- **Core Engine**: [Rust](https://www.rust-lang.org/) + [Tauri v2](https://v2.tauri.app/) (WinRT Notification, Windows 0.57)
 - **Frontend Framework**: [Svelte 5](https://svelte.dev/) (Runes reactivity)
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
 - **Icon System**: [Phosphor Icons](https://phosphoricons.com/)
-- **CI/CD Pipeline**: GitHub Actions with Node.js 24, multi-architecture packaging, and automated changelog releases.
+- **Installer**: NSIS Per-user AppData setup packages
+- **CI/CD Pipeline**: GitHub Actions with Node.js 24, multi-architecture packaging (x64, x86, arm64), and automated changelog releases.
 
 ---
 
