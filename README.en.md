@@ -71,6 +71,45 @@ Grab the latest installer from the [**GitHub Releases**](https://github.com/phat
 
 ---
 
+## Command-Line Interface (CLI - sups)
+
+The package includes a ultra-fast, native console binary `sups` (~1.3MB) with sub-5ms cold-start:
+
+```bash
+# List profiles in text or machine-readable JSON format
+sups list --version "SketchUp 2026"
+sups list --json
+
+# View active profile, configuration hash, and match status
+sups current
+
+# Safely switch to target profile
+sups switch "Production V-Ray" --force
+
+# Save active configuration snapshot
+sups save "Backup_2026" --no-shortcuts
+
+# Check running process status
+sups sketchup status --json
+```
+
+---
+
+## Model Context Protocol (MCP Server)
+
+Built-in native Rust stdio JSON-RPC 2.0 MCP Server for autonomous AI agents (Antigravity, Claude Desktop, Cursor, Codex, Windsurf):
+
+```bash
+sups mcp
+```
+
+Full AI documentation available in [docs/mcp/README.md](docs/mcp/README.md):
+- [AI Agent Operating Guide](docs/mcp/ai_agent_guide.md)
+- [Client Integration Guide](docs/mcp/integration_guide.md)
+- [8 MCP Tools Schema Reference](docs/mcp/tools_reference.md)
+
+---
+
 ## 🛠️ Tech Stack
 
 - **Core Engine**: [Rust](https://www.rust-lang.org/) + [Tauri v2](https://v2.tauri.app/) (WinRT Notification, Windows 0.57)

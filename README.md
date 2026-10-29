@@ -71,6 +71,45 @@ Truy cập trang [**GitHub Releases**](https://github.com/phathua/su-profile-swi
 
 ---
 
+## Giao diện dòng lệnh (CLI - sups)
+
+Ứng dụng đi kèm công cụ dòng lệnh native console `sups` siêu nhẹ (~1.3MB), khởi động dưới 5ms:
+
+```bash
+# Xem danh sách hồ sơ (dạng văn bản hoặc JSON)
+sups list --version "SketchUp 2026"
+sups list --json
+
+# Xem hồ sơ đang kích hoạt và mã băm cấu hình
+sups current
+
+# Chuyển đổi hồ sơ an toàn
+sups switch "Production V-Ray" --force
+
+# Lưu trạng thái hiện tại thành hồ sơ mới
+sups save "Backup_2026" --no-shortcuts
+
+# Kiểm tra tiến trình SketchUp
+sups sketchup status --json
+```
+
+---
+
+## Máy chủ Model Context Protocol (MCP Server)
+
+Tích hợp trực tiếp MCP Server chuẩn hóa JSON-RPC 2.0 stdio, cho phép các AI Agent (Antigravity, Claude Desktop, Cursor, Codex) tự động kiểm tra và chuyển đổi không gian làm việc SketchUp:
+
+```bash
+sups mcp
+```
+
+Xem tài liệu chi tiết tại [docs/mcp/README.md](docs/mcp/README.md):
+- [Hướng dẫn cho AI Agent](docs/mcp/ai_agent_guide.md)
+- [Hướng dẫn tích hợp các phần mềm AI](docs/mcp/integration_guide.md)
+- [Bảng đặc tả 8 công cụ MCP](docs/mcp/tools_reference.md)
+
+---
+
 ## 🛠️ Công nghệ phát triển
 
 - **Core Engine**: [Rust](https://www.rust-lang.org/) + [Tauri v2](https://v2.tauri.app/) (WinRT Notification, Windows 0.57)

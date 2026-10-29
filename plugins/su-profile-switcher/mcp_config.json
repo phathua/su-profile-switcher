@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "su-profile-switcher": {
+      "command": "d:\\2-VibeCode\\1_sketchup-extensions\\su-profile-switcher\\src-tauri\\target\\release\\sups.exe",
+      "args": ["mcp"]
+    }
+  }
+}

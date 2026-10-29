@@ -1,7 +1,9 @@
+pub mod cli;
 pub mod commands;
 pub mod engine;
 pub mod filter;
 pub mod hash;
+pub mod mcp;
 pub mod models;
 pub mod notification;
 pub mod plugin_icon;
@@ -19,10 +21,11 @@ pub struct AppStateWrapper(pub Mutex<models::AppState>);
 pub fn run() {
     let initial_state = engine::load_state();
 
-    // Check CLI arguments for headless test mode
+    // Check CLI / MCP arguments for headless mode
     let args: Vec<String> = std::env::args().collect();
-    if handle_cli_args(&args) {
-        return;
+    if cli::is_cli_invocation(&args) {
+        let code = cli::run_cli(&args);
+        std::process::exit(code);
     }
 
     tauri::Builder::default()
@@ -80,113 +83,3 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-fn handle_cli_args(args: &[String]) -> bool {
-    let mut switch_profile: Option<String> = None;
-    let mut save_profile: Option<String> = None;
-    let mut target_version: Option<String> = None;
-    let mut check_update = false;
-    let mut simulate_update: Option<String> = None;
-    let mut hash_check = false;
-    let mut list_profiles = false;
-    let mut save_plugins = true;
-    let mut save_shortcuts = true;
-
-    let mut i = 1;
-    while i < args.len() {
-        let arg = args[i].as_str();
-        if arg.eq_ignore_ascii_case("--switch") && i + 1 < args.len() {
-            switch_profile = Some(args[i + 1].clone());
-            i += 2;
-        } else if arg.eq_ignore_ascii_case("--save-profile") && i + 1 < args.len() {
-            save_profile = Some(args[i + 1].clone());
-            i += 2;
-        } else if arg.eq_ignore_ascii_case("--version") && i + 1 < args.len() {
-            target_version = Some(args[i + 1].clone());
-            i += 2;
-        } else if arg.eq_ignore_ascii_case("--check-update") {
-            check_update = true;
-            i += 1;
-        } else if arg.eq_ignore_ascii_case("--simulate-update") && i + 1 < args.len() {
-            simulate_update = Some(args[i + 1].clone());
-            i += 2;
-        } else if arg.eq_ignore_ascii_case("--hash-check") {
-            hash_check = true;
-            i += 1;
-        } else if arg.eq_ignore_ascii_case("--list-profiles") {
-            list_profiles = true;
-            i += 1;
-        } else if arg.eq_ignore_ascii_case("--plugins") && i + 1 < args.len() {
-            save_plugins = args[i + 1].parse().unwrap_or(true);
-            i += 2;
-        } else if arg.eq_ignore_ascii_case("--shortcuts") && i + 1 < args.len() {
-            save_shortcuts = args[i + 1].parse().unwrap_or(true);
-            i += 2;
-        } else if arg.eq_ignore_ascii_case("--test-toast") {
-            notification::show_profile_switched_toast("Kiểm thử");
-            println!("Toast notification sent!");
-            return true;
-        } else {
-            i += 1;
-        }
-    }
-
-    let is_cli = switch_profile.is_some()
-        || save_profile.is_some()
-        || check_update
-        || simulate_update.is_some()
-        || hash_check
-        || list_profiles;
-
-    if !is_cli {
-        return false;
-    }
-
-    let mut state = engine::load_state();
-    let ver = target_version.unwrap_or_else(|| {
-        if !state.selected_version.is_empty() {
-            state.selected_version.clone()
-        } else {
-            engine::detect_installed_versions().first().cloned().unwrap_or_else(|| "SketchUp 2026".to_string())
-        }
-    });
-
-    engine::ensure_initialized(&ver, &mut state);
-
-    if check_update || simulate_update.is_some() {
-        let info = updater::check_for_updates(simulate_update.as_deref());
-        println!("[UPDATE] Current: v{}, Latest: v{}, HasUpdate: {}", info.current_version, info.latest_version, info.has_update);
-    }
-
-    if hash_check {
-        let roaming = engine::get_roaming_sketchup_path(&ver);
-        let local = engine::get_local_sketchup_path(&ver);
-        let profiles_dir = engine::get_profiles_dir(&ver);
-        let active_hash = hash::compute_configuration_hash(&roaming, Some(&local), state.exclude_render_and_default_plugins);
-        let matching = hash::find_matching_profile(&roaming, &local, &profiles_dir, state.exclude_render_and_default_plugins);
-        println!("[HASH_CHECK] Version: {}, ActiveHash: {}, MatchingProfile: {}", ver, active_hash, matching.as_deref().unwrap_or("None"));
-    }
-
-    if let Some(save_name) = save_profile {
-        match engine::save_current_profile_as(&ver, &save_name, save_plugins, save_shortcuts, &mut state) {
-            Ok(_) => println!("[SAVE_PROFILE] Saved '{}' for {} (Plugins: {}, Shortcuts: {})", save_name, ver, save_plugins, save_shortcuts),
-            Err(e) => eprintln!("[ERROR] {}", e),
-        }
-    }
-
-    if let Some(target) = switch_profile {
-        match engine::switch_profile(&ver, &target, &mut state) {
-            Ok(_) => println!("[SWITCH_PROFILE] Switched to '{}' for {}", target, ver),
-            Err(e) => eprintln!("[ERROR] {}", e),
-        }
-    }
-
-    if list_profiles {
-        if let Some(cfg) = state.versions.get(&ver) {
-            println!("[LIST_PROFILES] Version: {}, Active: {}", ver, cfg.active_profile);
-            println!("[ALL_PROFILES] {}", cfg.profiles.join(", "));
-            println!("[RECENT_3] {}", cfg.recent_profiles.iter().take(3).cloned().collect::<Vec<_>>().join(", "));
-        }
-    }
-
-    true
-}
