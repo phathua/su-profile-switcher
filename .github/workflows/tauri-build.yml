@@ -72,12 +72,8 @@ jobs:
           } else {
             Copy-Item "src-tauri/target/${{ matrix.target }}/release/su-profile-switcher.exe" "$outDir/SuPS-${{ matrix.platform }}-v$appVer.exe"
           }
-          $zipName = "SuPS-${{ matrix.platform }}-v$appVer.zip"
-          Compress-Archive -Path "$outDir/*" -DestinationPath $zipName
-          Write-Output "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
           Write-Output "APP_VER=v$appVer" >> $env:GITHUB_ENV
           Write-Output "app_ver=v$appVer" >> $env:GITHUB_OUTPUT
-          Write-Output "zip_name=$zipName" >> $env:GITHUB_OUTPUT
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
@@ -85,7 +81,6 @@ jobs:
           name: SuPS-${{ matrix.platform }}
           path: |
             SuPS-${{ matrix.platform }}-*.exe
-            SuPS-${{ matrix.platform }}-*.zip
           if-no-files-found: error
 
   release:

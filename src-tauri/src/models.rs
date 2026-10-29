@@ -171,6 +171,8 @@ pub struct PluginItem {
     pub filename: String,
     #[serde(rename = "isExcluded")]
     pub is_excluded: bool,
+    #[serde(rename = "iconData", default)]
+    pub icon_data: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

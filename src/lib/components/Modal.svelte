@@ -674,8 +674,17 @@
                 <div class="grid grid-cols-2 gap-1.5">
                   {#each filteredPlugins as p}
                     <div class="flex items-center justify-between p-2 rounded-lg bg-[#f8fafc] dark:bg-[#121216] border border-[#e2e8f0] dark:border-[#1e1e24]">
-                      <div class="flex items-center space-x-1.5 truncate">
-                        <PuzzlePiece size={12} weight="bold" class="text-sky-600 dark:text-[#00c8ff] shrink-0" />
+                      <div class="flex items-center space-x-2 truncate">
+                        {#if p.iconData}
+                          <img
+                            src={p.iconData}
+                            alt=""
+                            class="w-4 h-4 object-contain rounded shrink-0"
+                            loading="lazy"
+                          />
+                        {:else}
+                          <PuzzlePiece size={13} weight="bold" class="text-sky-600 dark:text-[#00c8ff] shrink-0" />
+                        {/if}
                         <span class="text-xs font-semibold truncate text-[#0f172a] dark:text-[#fafafa]">{p.name}</span>
                       </div>
                       {#if p.isExcluded}

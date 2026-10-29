@@ -27,3 +27,4 @@ ureq = { version = "2.9", features = ["json"] }
 chrono = "0.4"
 windows = { version = "0.57", features = ["Data_Xml_Dom", "UI_Notifications"] }
 tauri-plugin-global-shortcut = "2"
+base64 = "0.23.1"

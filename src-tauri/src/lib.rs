@@ -4,6 +4,7 @@ pub mod filter;
 pub mod hash;
 pub mod models;
 pub mod notification;
+pub mod plugin_icon;
 pub mod process;
 pub mod shortcuts;
 pub mod tray;

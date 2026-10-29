@@ -793,19 +793,23 @@ pub fn get_profile_details(
                 if path.is_file() && fname.ends_with(".rb") {
                     let clean_name = fname.trim_end_matches(".rb").to_string();
                     let is_ex = filter::is_excluded(&fname);
+                    let icon_data = crate::plugin_icon::find_plugin_icon_data(&plugins_dir, &clean_name);
                     plugins.push(PluginItem {
                         name: clean_name,
                         filename: fname,
                         is_excluded: is_ex,
+                        icon_data,
                     });
                 } else if path.is_dir() {
                     let rb_check = plugins_dir.join(format!("{}.rb", fname));
                     if !rb_check.exists() {
                         let is_ex = filter::is_excluded(&fname);
+                        let icon_data = crate::plugin_icon::find_plugin_icon_data(&plugins_dir, &fname);
                         plugins.push(PluginItem {
                             name: fname.clone(),
                             filename: fname,
                             is_excluded: is_ex,
+                            icon_data,
                         });
                     }
                 }
