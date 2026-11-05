@@ -1,4 +1,6 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+#[cfg(not(target_os = "macos"))]
+use std::path::Path;
 use std::process::Command;
 use sysinfo::{ProcessesToUpdate, System};
 
@@ -8,21 +10,53 @@ pub fn is_sketchup_running() -> bool {
 
     for (_pid, proc_) in sys.processes() {
         let name = proc_.name().to_string_lossy().to_lowercase();
-        if name == "sketchup.exe" || name.starts_with("sketchup") {
+        if name == "sketchup.exe" || name == "sketchup" {
             return true;
         }
     }
     false
 }
 
+pub fn is_sketchup_version_running(version: &str) -> bool {
+    let mut sys = System::new();
+    sys.refresh_processes(ProcessesToUpdate::All, true);
+    sys.processes().values().any(|proc_| {
+        let name = proc_.name().to_string_lossy().to_lowercase();
+        if name != "sketchup.exe" && name != "sketchup" { return false; }
+        proc_.exe().map_or(false, |path| path.to_string_lossy().contains(version))
+    })
+}
+
 pub fn close_sketchup_gracefully() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        for version in crate::platform::installed_versions() {
+            if is_sketchup_version_running(&version) {
+                let year = version.split_whitespace().last().unwrap_or("");
+                let script = format!("tell application id \"com.sketchup.SketchUp.{year}\" to quit");
+                let _ = Command::new("osascript").args(["-e", &script]).status();
+            }
+        }
+        for _ in 0..40 {
+            if !is_sketchup_running() { return true; }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        return false;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        force_close_sketchup()
+    }
+}
+
+pub fn force_close_sketchup() -> bool {
     let mut sys = System::new();
     sys.refresh_processes(ProcessesToUpdate::All, true);
 
     let mut found = false;
     for (_pid, proc_) in sys.processes() {
         let name = proc_.name().to_string_lossy().to_lowercase();
-        if name == "sketchup.exe" || name.starts_with("sketchup") {
+        if name == "sketchup.exe" || name == "sketchup" {
             proc_.kill();
             found = true;
         }
@@ -35,6 +69,12 @@ pub fn close_sketchup_gracefully() -> bool {
 }
 
 pub fn find_sketchup_exe(version_display: &str) -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        return crate::platform::sketchup_app(version_display);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
     let program_files = std::env::var("ProgramFiles").unwrap_or_else(|_| "C:\\Program Files".to_string());
     let year = version_display.split_whitespace().last().unwrap_or(version_display);
 
@@ -54,6 +94,7 @@ pub fn find_sketchup_exe(version_display: &str) -> Option<PathBuf> {
     }
 
     None
+    }
 }
 
 pub fn launch_sketchup(version_display: &str, custom_path: Option<&str>) -> bool {
@@ -74,7 +115,12 @@ pub fn launch_sketchup(version_display: &str, custom_path: Option<&str>) -> bool
         }
     };
 
-    Command::new(exe_path)
-        .spawn()
-        .is_ok()
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open").arg("-a").arg(exe_path).spawn().is_ok()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Command::new(exe_path).spawn().is_ok()
+    }
 }

@@ -15,6 +15,7 @@ export const appStore = $state({
   },
   activeTab: "profiles",
   installedVersions: [],
+  platform: "windows",
   profileComponents: [], // Array of { name, hasPlugins, hasShortcuts, hasToolbars, hasMaterials, hasTemplates }
   sketchupRunning: false,
   matchingProfile: null,
@@ -108,6 +109,7 @@ export async function setLanguage(newLang) {
 
 export async function initAppStore() {
   try {
+    appStore.platform = await invoke("get_platform");
     const installed = await invoke("get_installed_versions");
     appStore.installedVersions = installed;
 
@@ -361,7 +363,6 @@ export async function applyUpdateAndRestart(restartOnFinish = true) {
   setBusy(true, restartOnFinish ? "Đang tải bản cập nhật và tự khởi động lại..." : "Đang tải bản cập nhật trong nền...");
   try {
     await invoke("apply_update_and_restart", {
-      downloadUrl: appStore.updateInfo.downloadUrl || null,
       latestVersion: appStore.updateInfo.latestVersion,
       restartOnFinish,
     });

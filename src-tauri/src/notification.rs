@@ -113,9 +113,25 @@ pub fn ensure_aumid_registered() {
         .output();
 }
 
-pub fn show_profile_switched_toast(profile_name: &str) {
+pub fn show_profile_switched_toast(app: &tauri::AppHandle, profile_name: &str) {
+    #[cfg(target_os = "macos")]
+    {
+        use tauri_plugin_notification::NotificationExt;
+        use tauri::plugin::PermissionState;
+        let notification = app.notification();
+        if notification.permission_state().ok() == Some(PermissionState::Prompt) {
+            let _ = notification.request_permission();
+        }
+        if notification.permission_state().ok() == Some(PermissionState::Granted) {
+            let _ = notification.builder()
+                .title(APP_NAME)
+                .body(format!("Đã chuyển sang hồ sơ '{}'", profile_name))
+                .show();
+        }
+    }
     #[cfg(windows)]
     {
+        let _ = app;
         ensure_aumid_registered();
         let icon_path = resolve_app_icon_path();
         let is_image = icon_path
@@ -177,6 +193,7 @@ mod tests {
         assert_ne!(ext, "exe", "Icon must NEVER be an executable binary!");
     }
 
+    #[cfg(windows)]
     #[test]
     fn test_ensure_aumid_registered() {
         ensure_aumid_registered();

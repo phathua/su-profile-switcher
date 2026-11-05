@@ -1,5 +1,6 @@
 <script>
   import { Keyboard, PuzzlePiece, CheckCircle, ArrowRight } from "phosphor-svelte";
+  import { appStore } from "../store.svelte.js";
 
   let { shortcuts = [], plugins = [] } = $props();
 
@@ -93,13 +94,13 @@
       ctrl = parts[0] === "1";
       alt = parts[1] === "1";
       shift = parts[2] === "1";
-      baseKey = parts[3].toUpperCase();
+      baseKey = parts[3] ? parts[3].toUpperCase() : "SPACE";
     } else {
       // Fallback parse from keyDisplay e.g. "Shift + Z"
       const tokens = (item.keyDisplay || "").split("+").map(t => t.trim());
       baseKey = tokens[tokens.length - 1].toUpperCase();
-      ctrl = tokens.some(t => t.toLowerCase() === "ctrl");
-      alt = tokens.some(t => t.toLowerCase() === "alt");
+      ctrl = tokens.some(t => ["ctrl", "command", "cmd"].includes(t.toLowerCase()));
+      alt = tokens.some(t => ["alt", "option", "opt"].includes(t.toLowerCase()));
       shift = tokens.some(t => t.toLowerCase() === "shift");
     }
 
@@ -217,13 +218,13 @@
     { label: "Shift", key: "RSHIFT", w: "w-[46px]" },
   ];
 
-  const rowSpace = [
-    { label: "Ctrl", key: "CTRL", w: "w-[38px]" },
-    { label: "Alt", key: "ALT", w: "w-[38px]" },
+  const rowSpace = $derived([
+    { label: appStore.platform === "macos" ? "Cmd" : "Ctrl", key: "CTRL", w: "w-[38px]" },
+    { label: appStore.platform === "macos" ? "Opt" : "Alt", key: "ALT", w: "w-[38px]" },
     { label: "Space", key: "SPACE", w: "flex-1" },
-    { label: "Alt", key: "RALT", w: "w-[38px]" },
-    { label: "Ctrl", key: "RCTRL", w: "w-[38px]" },
-  ];
+    { label: appStore.platform === "macos" ? "Opt" : "Alt", key: "RALT", w: "w-[38px]" },
+    { label: appStore.platform === "macos" ? "Cmd" : "Ctrl", key: "RCTRL", w: "w-[38px]" },
+  ]);
 
   const rowNumPad = [
     { label: "Num0", key: "NUMPAD0" },
@@ -257,10 +258,10 @@
 
   function formatKeyWithModifier(keyId) {
     const prefix = activeModifier === "shift" ? "Shift + "
-      : activeModifier === "ctrl" ? "Ctrl + "
-      : activeModifier === "alt" ? "Alt + "
-      : activeModifier === "ctrl_shift" ? "Ctrl + Shift + "
-      : activeModifier === "alt_shift" ? "Alt + Shift + "
+      : activeModifier === "ctrl" ? `${appStore.platform === "macos" ? "Command" : "Ctrl"} + `
+      : activeModifier === "alt" ? `${appStore.platform === "macos" ? "Option" : "Alt"} + `
+      : activeModifier === "ctrl_shift" ? `${appStore.platform === "macos" ? "Command" : "Ctrl"} + Shift + `
+      : activeModifier === "alt_shift" ? `${appStore.platform === "macos" ? "Option" : "Alt"} + Shift + `
       : "";
     return prefix + keyId;
   }
@@ -297,7 +298,7 @@
           ? 'bg-sky-500/20 text-sky-600 dark:text-[#00c8ff] border border-sky-500/40'
           : 'bg-[#f1f5f9] dark:bg-[#16161b] text-[#64748b] dark:text-[#a1a1aa] hover:bg-slate-200 dark:hover:bg-[#202028]'}"
       >
-        Ctrl
+        {appStore.platform === "macos" ? "Command" : "Ctrl"}
       </button>
 
       <button
@@ -307,7 +308,7 @@
           ? 'bg-sky-500/20 text-sky-600 dark:text-[#00c8ff] border border-sky-500/40'
           : 'bg-[#f1f5f9] dark:bg-[#16161b] text-[#64748b] dark:text-[#a1a1aa] hover:bg-slate-200 dark:hover:bg-[#202028]'}"
       >
-        Alt
+        {appStore.platform === "macos" ? "Option" : "Alt"}
       </button>
 
       <button
@@ -317,7 +318,7 @@
           ? 'bg-sky-500/20 text-sky-600 dark:text-[#00c8ff] border border-sky-500/40'
           : 'bg-[#f1f5f9] dark:bg-[#16161b] text-[#64748b] dark:text-[#a1a1aa] hover:bg-slate-200 dark:hover:bg-[#202028]'}"
       >
-        Ctrl+Shift
+        {appStore.platform === "macos" ? "Command" : "Ctrl"}+Shift
       </button>
     </div>
 

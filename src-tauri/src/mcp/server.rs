@@ -397,7 +397,7 @@ fn execute_tool(name: &str, args: &Value) -> (String, bool) {
             if process::is_sketchup_running() {
                 if force {
                     eprintln!("[MCP] SketchUp is running. Force closing before switch...");
-                    let closed = process::close_sketchup_gracefully();
+                    let closed = process::force_close_sketchup();
                     if !closed {
                         return (
                             "SketchUp is currently running and could not be terminated. Switch aborted."
@@ -521,7 +521,7 @@ fn execute_tool(name: &str, args: &Value) -> (String, bool) {
                 });
                 (serde_json::to_string_pretty(&result).unwrap_or_default(), !success)
             } else if action == "kill" {
-                let closed = process::close_sketchup_gracefully();
+                let closed = process::force_close_sketchup();
                 let result = json!({
                     "action": "kill",
                     "success": closed,

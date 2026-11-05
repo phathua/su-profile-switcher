@@ -2,10 +2,10 @@ name: Tauri Release Build
 
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
+    branches: [main]
+    tags: ['v*']
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -14,138 +14,141 @@ permissions:
 jobs:
   build:
     name: Build (${{ matrix.platform }})
-    runs-on: windows-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: x64
-            target: x86_64-pc-windows-msvc
-          - platform: x86
-            target: i686-pc-windows-msvc
-          - platform: arm64
-            target: aarch64-pc-windows-msvc
-
+          - { platform: x64, runner: windows-latest, target: x86_64-pc-windows-msvc, bundle: nsis }
+          - { platform: x86, runner: windows-latest, target: i686-pc-windows-msvc, bundle: nsis }
+          - { platform: arm64, runner: windows-latest, target: aarch64-pc-windows-msvc, bundle: nsis }
+          - { platform: macos-x64, runner: macos-15-intel, target: x86_64-apple-darwin, bundle: app }
+          - { platform: macos-arm64, runner: macos-15, target: aarch64-apple-darwin, bundle: app }
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: 10
-
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Auto Bump Version
+      - name: Import Apple signing certificate
+        if: matrix.bundle == 'app' && env.APPLE_CERTIFICATE != ''
+        shell: bash
+        run: |
+          printf '%s' "$APPLE_CERTIFICATE" | base64 -D > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+      - run: pnpm install --frozen-lockfile
+      - name: Test frontend
+        run: pnpm build
+      - name: Test Rust
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+      - name: Calculate release version
         run: node scripts/bump-version.js
-
-      - name: Build Tauri App (NSIS Bundle)
-        run: pnpm tauri build --target ${{ matrix.target }}
-
-      - name: Package Artifacts
-        id: package
+      - name: Build signed updater bundle
+        if: env.TAURI_SIGNING_PRIVATE_KEY != ''
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundle }} --config src-tauri/TauriRelease.json
+      - name: Build test bundle
+        if: env.TAURI_SIGNING_PRIVATE_KEY == ''
+        run: pnpm tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundle }}
+      - name: Package Windows
+        if: matrix.bundle == 'nsis'
         shell: pwsh
         run: |
-          $appVer = (Get-Content package.json | ConvertFrom-Json).version
-          $outDir = "dist-release-${{ matrix.platform }}"
-          New-Item -ItemType Directory -Path $outDir -Force
-          $nsisExe = Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($nsisExe) {
-            Copy-Item $nsisExe.FullName "$outDir/SuPS-${{ matrix.platform }}-v$appVer-Setup.exe"
-            Copy-Item $nsisExe.FullName "SuPS-${{ matrix.platform }}-v$appVer-Setup.exe"
-            Write-Output "SETUP_NAME=SuPS-${{ matrix.platform }}-v$appVer-Setup.exe" >> $env:GITHUB_ENV
-          } else {
-            Copy-Item "src-tauri/target/${{ matrix.target }}/release/su-profile-switcher.exe" "$outDir/SuPS-${{ matrix.platform }}-v$appVer.exe"
+          $ver = (Get-Content package.json | ConvertFrom-Json).version
+          $dir = "dist-release-${{ matrix.platform }}"
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          $installer = Get-ChildItem "src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe" | Select-Object -First 1
+          $name = "SuPS-${{ matrix.platform }}-v$ver-Setup.exe"
+          Copy-Item $installer.FullName "$dir/$name"
+          $update = $installer.FullName -replace '\.exe$', '.nsis.zip'
+          if (Test-Path $update) {
+            Copy-Item $update "$dir/SuPS-${{ matrix.platform }}-v$ver-Setup.nsis.zip"
+            Copy-Item "$update.sig" "$dir/SuPS-${{ matrix.platform }}-v$ver-Setup.nsis.zip.sig"
           }
-          Write-Output "APP_VER=v$appVer" >> $env:GITHUB_ENV
-          Write-Output "app_ver=v$appVer" >> $env:GITHUB_OUTPUT
-
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+      - name: Package macOS
+        if: matrix.bundle == 'app'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver=$(node -p "require('./package.json').version")
+          dir="dist-release-${{ matrix.platform }}"
+          mkdir -p "$dir"
+          app=$(find "src-tauri/target/${{ matrix.target }}/release/bundle/macos" -maxdepth 1 -name '*.app' -print -quit)
+          stage=$(mktemp -d)
+          trap 'rm -rf "$stage"' EXIT
+          ditto "$app" "$stage/$(basename "$app")"
+          ln -s /Applications "$stage/Applications"
+          dmg="$dir/SuPS-${{ matrix.platform }}-v$ver.dmg"
+          hdiutil create -volname 'SketchUp Profile Switcher' -srcfolder "$stage" -format UDZO -ov "$dmg"
+          if [[ -n "$APPLE_SIGNING_IDENTITY" && -n "$APPLE_ID" && -n "$APPLE_PASSWORD" && -n "$APPLE_TEAM_ID" ]]; then
+            xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+          fi
+          archive=""
+          if [[ -d "src-tauri/target/${{ matrix.target }}/release/bundle/macos" ]]; then
+            archive=$(find "src-tauri/target/${{ matrix.target }}/release/bundle/macos" -maxdepth 1 -name '*.app.tar.gz' -print -quit)
+          fi
+          if [[ -n "$archive" ]]; then
+            name="SuPS-${{ matrix.platform }}-v$ver.app.tar.gz"
+            cp "$archive" "$dir/$name"
+            if [[ -f "$archive.sig" ]]; then cp "$archive.sig" "$dir/$name.sig"; fi
+          fi
+      - uses: actions/upload-artifact@v4
         with:
           name: SuPS-${{ matrix.platform }}
-          path: |
-            SuPS-${{ matrix.platform }}-*.exe
+          path: dist-release-${{ matrix.platform }}/*
           if-no-files-found: error
 
   release:
-    name: Publish Release & Changelog
+    name: Publish release
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
-
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: release-artifacts
-
-      - name: Generate Changelog Between Releases
-        id: changelog
-        shell: bash
-        run: |
-          node scripts/bump-version.js
-          APP_VER="v$(node -p "require('./package.json').version")"
-          echo "tag_name=$APP_VER" >> $GITHUB_OUTPUT
-
-          # Lay danh sach commit giua release gan nhat va HEAD
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          echo "Previous tag: $LAST_TAG"
-          
-          if [ -z "$LAST_TAG" ]; then
-            COMMITS=$(git log --pretty=format:"* %s ([%h](https://github.com/${{ github.repository }}/commit/%H))")
-          else
-            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"* %s ([%h](https://github.com/${{ github.repository }}/commit/%H))")
-          fi
-
-          if [ -z "$COMMITS" ]; then
-            COMMITS="* Không có commit mới kể từ bản phát hành trước."
-          fi
-
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          echo "$COMMITS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Create or Update GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.changelog.outputs.tag_name }}
-          name: SketchUp Profile Switcher ${{ steps.changelog.outputs.tag_name }}
-          body: |
-            ### 📋 Nhật ký thay đổi (Changelog):
-            ${{ steps.changelog.outputs.CHANGELOG }}
-
-            ---
-            *Bản phát hành tự động biên dịch đa kiến trúc (x64, x86 32-bit, arm64).*
-          draft: false
-          prerelease: false
-          files: |
-            release-artifacts/**/*.exe
-            release-artifacts/**/*.zip
+      - name: Prepare release assets
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/ReleaseManifest.js
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: SketchUp Profile Switcher ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          files: release-assets/*

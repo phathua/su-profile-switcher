@@ -105,6 +105,8 @@
   let importTemplates = $state(false);
   let importApplyImmediately = $state(false);
   let isExecutingImport = $state(false);
+  let sourcePlatform = $state("");
+  let shortcutMode = $state("skip");
 
   // Batch import modal state
   let batchImportItems = $state([]);
@@ -132,7 +134,7 @@
         selectedColor = "#00c8ff";
         savePlugins = true;
         saveShortcuts = true;
-        saveToolbars = false;
+        saveToolbars = appStore.platform === "macos";
         saveMaterials = false;
         saveTemplates = false;
       } else if (appStore.modal.type === "view_profile") {
@@ -151,6 +153,8 @@
         loadChangelogData();
       } else if (appStore.modal.type === "import_profile_modal") {
         const analysis = appStore.modal.analysis || {};
+        sourcePlatform = analysis.sourcePlatform || "";
+        shortcutMode = "skip";
         importProfileName = analysis.suggestedProfileName || "Imported_Profile";
         importVersion = analysis.detectedVersion || appStore.state.selectedVersion;
         importPlugins = analysis.hasPlugins ?? true;
@@ -162,6 +166,8 @@
         isExecutingImport = false;
       } else if (appStore.modal.type === "batch_import_modal") {
         const analysis = appStore.modal.analysis || {};
+        sourcePlatform = analysis.sourcePlatform || "";
+        shortcutMode = "skip";
         const profs = analysis.profiles || [];
         const existingProfiles = appStore.state.versions[appStore.state.selectedVersion]?.profiles || [];
 
@@ -207,6 +213,8 @@
       alert("Vui lòng chọn ít nhất một hồ sơ để nhập.");
       return;
     }
+    if (!sourcePlatform) { alert("Hãy chọn hệ điều hành đã tạo bản sao lưu."); return; }
+    if (sourcePlatform !== appStore.platform && !confirm("Bản sao lưu thuộc hệ điều hành khác. Phím tắt, thanh công cụ và plugin có thể không tương thích. Tiếp tục nhập?")) return;
 
     isExecutingBatchImport = true;
     try {
@@ -220,16 +228,18 @@
         importTemplates: i.importTemplates,
       }));
 
-      const s = await invoke("execute_batch_import", {
+      const result = await invoke("execute_batch_import", {
         version: appStore.state.selectedVersion,
         sourcePath: appStore.modal.sourcePath,
         items: itemsToPayload,
+        sourcePlatform,
+        shortcutMode,
       });
 
-      appStore.state = s;
+      appStore.state = result.state;
       await loadProfileComponents();
       closeModal();
-      alert(`Đã nhập thành công ${selectedItems.length} hồ sơ!`);
+      alert(`Đã nhập thành công ${selectedItems.length} hồ sơ!${result.warnings?.length ? `\n\n${result.warnings.join("\n")}` : ""}`);
     } catch (e) {
       alert("Lỗi nhập hàng loạt: " + String(e));
     } finally {
@@ -269,9 +279,11 @@
       alert("Vui lòng đặt tên hồ sơ.");
       return;
     }
+    if (!sourcePlatform) { alert("Hãy chọn hệ điều hành đã tạo bản sao lưu."); return; }
+    if (sourcePlatform !== appStore.platform && !confirm("Bản sao lưu thuộc hệ điều hành khác. Tiếp tục nhập?")) return;
     isExecutingImport = true;
     try {
-      const s = await invoke("import_profile", {
+      const result = await invoke("import_profile", {
         version: importVersion || appStore.state.selectedVersion,
         profileName: importProfileName.trim(),
         sourcePath: appStore.modal.sourcePath,
@@ -281,11 +293,13 @@
         importMaterials,
         importTemplates,
         applyImmediately: importApplyImmediately,
+        sourcePlatform,
+        shortcutMode,
       });
-      appStore.state = s;
+      appStore.state = result.state;
       await loadProfileComponents();
       closeModal();
-      alert(t("importSuccess"));
+      alert(`${t("importSuccess")}${result.warnings?.length ? `\n\n${result.warnings.join("\n")}` : ""}`);
     } catch (e) {
       alert("Lỗi nhập hồ sơ: " + String(e));
     } finally {
@@ -319,11 +333,12 @@
     if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
 
     let parts = [];
+    if (e.metaKey) parts.push("Command");
     if (e.ctrlKey) parts.push("Ctrl");
-    if (e.altKey) parts.push("Alt");
+    if (e.altKey) parts.push(appStore.platform === "macos" ? "Option" : "Alt");
     if (e.shiftKey) parts.push("Shift");
 
-    let key = e.key.toUpperCase();
+    let key = e.key === " " ? "Space" : e.key.toUpperCase();
     if (key === "ESCAPE") {
       shortcutValue = "";
       isRecordingShortcut = false;
@@ -386,10 +401,12 @@
     downloadingUpdate = true;
     try {
       await invoke("apply_update_and_restart", {
-        downloadUrl: info.downloadUrl || null,
         latestVersion: info.latestVersion,
         restartOnFinish: false,
       });
+      downloadingUpdate = false;
+      closeModal();
+      alert("Đã cài bản cập nhật. Hãy khởi động lại ứng dụng để dùng phiên bản mới.");
     } catch (e) {
       alert("Lỗi tải cập nhật ngầm: " + String(e));
       downloadingUpdate = false;
@@ -402,7 +419,7 @@
   <!-- Overlay Backdrop -->
   <div class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-3">
     <!-- Modal Container -->
-    <div class="bg-[#ffffff] dark:bg-[#0a0a0d] border border-[#cbd5e1] dark:border-[#222228] rounded-xl shadow-2xl w-full {appStore.modal?.type === 'view_profile' ? 'max-w-[650px] max-h-[420px] h-[420px]' : appStore.modal?.type === 'changelog' ? 'max-w-[560px] max-h-[420px] h-auto' : appStore.modal?.type === 'batch_import_modal' ? 'max-w-[560px] max-h-[460px] h-auto' : appStore.modal?.type === 'import_profile_modal' ? 'max-w-[460px] max-h-[400px]' : 'max-w-[400px] max-h-[380px]'} overflow-hidden flex flex-col animate-in fade-in duration-100">
+    <div class="bg-[#ffffff] dark:bg-[#0a0a0d] border border-[#cbd5e1] dark:border-[#222228] rounded-xl shadow-2xl w-full {appStore.modal?.type === 'view_profile' ? 'max-w-[650px] max-h-[420px] h-[420px]' : appStore.modal?.type === 'changelog' ? 'max-w-[560px] max-h-[420px] h-auto' : appStore.modal?.type === 'batch_import_modal' ? 'max-w-[560px] max-h-[90vh] h-auto overflow-y-auto' : appStore.modal?.type === 'import_profile_modal' ? 'max-w-[460px] max-h-[90vh] overflow-y-auto' : 'max-w-[400px] max-h-[380px]'} overflow-hidden flex flex-col animate-in fade-in duration-100">
       
       <!-- 1. Create Profile Modal -->
       {#if appStore.modal.type === "create_profile" || appStore.modal.type === "save"}
@@ -577,7 +594,7 @@
                     : 'border-[#cbd5e1] dark:border-[#2b2b34] bg-[#f8fafc] dark:bg-[#141417] text-[#0f172a] dark:text-[#ffffff]'}"
                 >
                   {#if isRecordingShortcut}
-                    Bấm tổ hợp phím (ví dụ: Ctrl+Alt+1)...
+                    Bấm tổ hợp phím (ví dụ: {appStore.platform === "macos" ? "Command+Option+1" : "Ctrl+Alt+1"})...
                   {:else if shortcutValue}
                     {shortcutValue}
                   {:else}
@@ -1110,6 +1127,20 @@
             </button>
           </div>
 
+          <div class="text-[11px] rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 p-2 space-y-1">
+            <div>Hệ nguồn: {sourcePlatform || "Chưa xác định"} · Máy này: {appStore.platform}</div>
+            {#if !analysis.sourcePlatform}
+              <select bind:value={sourcePlatform} class="text-slate-900 rounded px-1 py-0.5">
+                <option value="">Chọn hệ nguồn</option><option value="windows">Windows</option><option value="macos">macOS</option>
+              </select>
+            {/if}
+            {#if sourcePlatform && sourcePlatform !== appStore.platform}
+              <p>Plugin sẽ được nhập nguyên. Thanh công cụ và đường dẫn riêng của hệ nguồn sẽ được bỏ qua.</p>
+              <label><input type="radio" bind:group={shortcutMode} value="skip" /> Bỏ phím tắt nguồn</label>
+              <label class="ml-3"><input type="radio" bind:group={shortcutMode} value="convert" /> Chuyển phím tắt có cảnh báo</label>
+            {/if}
+          </div>
+
           <div class="space-y-2.5 text-xs">
             <div class="grid grid-cols-2 gap-2">
               <div>
@@ -1194,6 +1225,20 @@
             <button onclick={closeModal} class="text-[#64748b] dark:text-[#a1a1aa] hover:text-[#0f172a] dark:hover:text-white cursor-pointer" title="Đóng">
               <X size={14} weight="bold" />
             </button>
+          </div>
+
+          <div class="text-[11px] rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 p-2 space-y-1">
+            <div>Hệ nguồn: {sourcePlatform || "Chưa xác định"} · Máy này: {appStore.platform}</div>
+            {#if !analysis.sourcePlatform}
+              <select bind:value={sourcePlatform} class="text-slate-900 rounded px-1 py-0.5">
+                <option value="">Chọn hệ nguồn</option><option value="windows">Windows</option><option value="macos">macOS</option>
+              </select>
+            {/if}
+            {#if sourcePlatform && sourcePlatform !== appStore.platform}
+              <p>Plugin được nhập nguyên; thanh công cụ và đường dẫn riêng sẽ bỏ qua. Phím tắt chuyển đổi cần kiểm tra lại trong SketchUp.</p>
+              <label><input type="radio" bind:group={shortcutMode} value="skip" /> Bỏ phím tắt nguồn</label>
+              <label class="ml-3"><input type="radio" bind:group={shortcutMode} value="convert" /> Chuyển phím tắt</label>
+            {/if}
           </div>
 
           <!-- Version mismatch gentle warning banner -->

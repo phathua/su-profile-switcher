@@ -94,7 +94,10 @@ fn print_help() {
     println!("  --json                       Output result in JSON format for automated tooling");
     println!("  --force                      Force kill SketchUp if running before switching");
     println!("  --no-plugins                 Exclude plugins when saving profile");
-    println!("  --no-shortcuts               Exclude shortcuts when saving profile\n");
+    println!("  --no-shortcuts               Exclude shortcuts when saving profile");
+    println!("  --toolbars                   Include toolbar settings when saving");
+    println!("  --materials                  Include materials when saving");
+    println!("  --templates                  Include templates when saving\n");
     println!("EXAMPLES:");
     println!("  sups list --version \"SketchUp 2026\"");
     println!("  sups switch \"Production V-Ray\" --force");
@@ -229,7 +232,7 @@ fn handle_switch(args: &[String]) -> i32 {
     if process::is_sketchup_running() {
         if force {
             println!("[INFO] SketchUp is running. Force closing before switch...");
-            if !process::close_sketchup_gracefully() {
+            if !process::force_close_sketchup() {
                 eprintln!("[ERROR] Could not terminate SketchUp. Aborting switch.");
                 return 1;
             }
@@ -396,7 +399,7 @@ fn handle_sketchup(args: &[String]) -> i32 {
             }
         }
         "kill" => {
-            if process::close_sketchup_gracefully() {
+            if process::force_close_sketchup() {
                 println!("[SUCCESS] SketchUp terminated.");
                 0
             } else {

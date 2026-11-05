@@ -4,10 +4,16 @@ pub mod commands;
 pub mod engine;
 pub mod filter;
 pub mod hash;
+#[path = "ProfileImport.rs"]
+pub mod import_compat;
 pub mod mcp;
 pub mod models;
+#[path = "ToolbarMac.rs"]
+pub mod mac_toolbar;
 pub mod notification;
 pub mod plugin_icon;
+#[path = "SketchUpPlatform.rs"]
+pub mod platform;
 pub mod process;
 pub mod shortcuts;
 pub mod tray;
@@ -40,6 +46,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .manage(AppStateWrapper(Mutex::new(initial_state)))
         .setup(|app| {
             #[cfg(windows)]
@@ -58,6 +66,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_app_state,
             commands::get_installed_versions,
+            commands::get_platform,
             commands::select_version,
             commands::switch_profile,
             commands::save_profile,
@@ -70,7 +79,6 @@ pub fn run() {
             commands::launch_sketchup,
             commands::export_profile_zip,
             commands::check_for_updates,
-            commands::download_update,
             commands::update_settings,
             commands::get_profile_components,
             commands::save_profile_custom,

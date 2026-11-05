@@ -18,11 +18,17 @@ pub fn get_installed_versions() -> Vec<String> {
 }
 
 #[tauri::command]
+pub fn get_platform() -> &'static str {
+    crate::import_compat::current_platform()
+}
+
+#[tauri::command]
 pub fn select_version(
     version: String,
     state_wrap: State<'_, AppStateWrapper>,
     app: tauri::AppHandle,
 ) -> Result<AppState, String> {
+    engine::validate_version(&version)?;
     let mut state = state_wrap.0.lock().unwrap();
     state.selected_version = version.clone();
     engine::ensure_initialized(&version, &mut state);
@@ -41,7 +47,7 @@ pub fn switch_profile(
     let mut state = state_wrap.0.lock().unwrap();
     engine::switch_profile(&version, &target_profile, &mut state)?;
     crate::tray::update_tray_menu(&app);
-    crate::notification::show_profile_switched_toast(&target_profile);
+    crate::notification::show_profile_switched_toast(&app, &target_profile);
     Ok(state.clone())
 }
 
@@ -104,7 +110,7 @@ pub fn is_sketchup_running() -> bool {
 
 #[tauri::command]
 pub fn close_sketchup() -> bool {
-    process::close_sketchup_gracefully()
+    process::force_close_sketchup()
 }
 
 #[tauri::command]
@@ -126,29 +132,21 @@ pub fn export_profile_zip(
 }
 
 #[tauri::command]
-pub fn check_for_updates(simulate: Option<String>) -> UpdateInfo {
-    updater::check_for_updates(simulate.as_deref())
+pub async fn check_for_updates(app: tauri::AppHandle, simulate: Option<String>) -> Result<UpdateInfo, String> {
+    updater::check_for_updates(&app, simulate.as_deref()).await
 }
 
 #[tauri::command]
-pub fn download_update(url: String, latest_version: String) -> Result<String, String> {
-    let path = updater::download_update(&url, &latest_version)?;
-    Ok(path.to_string_lossy().to_string())
-}
-
-#[tauri::command]
-pub fn apply_update_and_restart(
+pub async fn apply_update_and_restart(
     app: tauri::AppHandle,
-    download_url: Option<String>,
     latest_version: String,
     restart_on_finish: Option<bool>,
 ) -> Result<(), String> {
     updater::apply_update_and_restart(
         &app,
-        download_url.as_deref(),
         &latest_version,
         restart_on_finish.unwrap_or(true),
-    )
+    ).await
 }
 
 #[tauri::command]
@@ -272,11 +270,13 @@ pub fn import_profile(
     import_materials: bool,
     import_templates: bool,
     apply_immediately: bool,
+    source_platform: Option<String>,
+    shortcut_mode: Option<String>,
     state_wrap: State<'_, AppStateWrapper>,
     app: tauri::AppHandle,
-) -> Result<AppState, String> {
+) -> Result<serde_json::Value, String> {
     let mut state = state_wrap.0.lock().unwrap();
-    engine::import_profile(
+    let warnings = engine::import_profile(
         &version,
         &profile_name,
         &source_path,
@@ -286,10 +286,12 @@ pub fn import_profile(
         import_materials,
         import_templates,
         apply_immediately,
+        source_platform.as_deref(),
+        shortcut_mode.as_deref().unwrap_or("skip"),
         &mut state,
     )?;
     crate::tray::update_tray_menu(&app);
-    Ok(state.clone())
+    Ok(serde_json::json!({ "state": state.clone(), "warnings": warnings }))
 }
 
 
@@ -338,12 +340,14 @@ pub fn execute_batch_import(
     version: String,
     source_path: String,
     items: Vec<BatchImportProfileItem>,
+    source_platform: Option<String>,
+    shortcut_mode: Option<String>,
     state_wrap: State<'_, AppStateWrapper>,
     app: tauri::AppHandle,
-) -> Result<AppState, String> {
+) -> Result<serde_json::Value, String> {
     let mut state = state_wrap.0.lock().unwrap();
-    engine::execute_batch_import(&version, &source_path, &items, &mut state)?;
+    let warnings = engine::execute_batch_import(&version, &source_path, &items, source_platform.as_deref(), shortcut_mode.as_deref().unwrap_or("skip"), &mut state)?;
     crate::tray::update_tray_menu(&app);
     let _ = app.emit("profiles-updated", &*state);
-    Ok(state.clone())
+    Ok(serde_json::json!({ "state": state.clone(), "warnings": warnings }))
 }

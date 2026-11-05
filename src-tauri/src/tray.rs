@@ -125,7 +125,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<TrayIcon, tauri::Error> {
     let tray = TrayIconBuilder::with_id("main_tray")
         .icon(icon_image)
         .menu(&menu)
-        .show_menu_on_left_click(false)
+        .show_menu_on_left_click(cfg!(target_os = "macos"))
         .on_menu_event(move |app, event| {
             let id = event.id().as_ref();
             match id {
@@ -193,7 +193,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<TrayIcon, tauri::Error> {
                                 let mut mutable_state = state.clone();
                                 let _ = engine::switch_profile(&current_ver, &target_clone, &mut mutable_state);
                                 update_tray_menu(app);
-                                crate::notification::show_profile_switched_toast(&target_clone);
+                                crate::notification::show_profile_switched_toast(app, &target_clone);
                                 if let Some(w) = app.get_webview_window("main") {
                                     let _ = w.emit("profile-switched", target_clone);
                                 }

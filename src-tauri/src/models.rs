@@ -177,6 +177,8 @@ pub struct ImportAnalysis {
     pub plugin_count: usize,
     #[serde(rename = "suggestedProfileName")]
     pub suggested_profile_name: String,
+    #[serde(rename = "sourcePlatform")]
+    pub source_platform: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -222,6 +224,8 @@ pub struct BackupManifest {
     #[serde(rename = "backupDate")]
     pub backup_date: String,
     pub profiles: Vec<BackupManifestProfile>,
+    #[serde(rename = "sourcePlatform", default)]
+    pub source_platform: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -239,6 +243,8 @@ pub struct BatchImportAnalysis {
     #[serde(rename = "backupDate")]
     pub backup_date: Option<String>,
     pub profiles: Vec<BackupManifestProfile>,
+    #[serde(rename = "sourcePlatform")]
+    pub source_platform: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

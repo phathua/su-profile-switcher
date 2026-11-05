@@ -57,9 +57,19 @@ fn handle_shortcut_switch(app: &AppHandle, version: &str, target_profile: &str) 
     let mut state = engine::load_state();
     if engine::switch_profile(version, target_profile, &mut state).is_ok() {
         crate::tray::update_tray_menu(app);
-        notification::show_profile_switched_toast(target_profile);
+        notification::show_profile_switched_toast(app, target_profile);
         if let Some(w) = app.get_webview_window("main") {
             let _ = w.emit("profile-switched", target_profile);
         }
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_mac_global_shortcut_labels() {
+        assert!(Shortcut::from_str("Command+Option+1").is_ok());
     }
 }

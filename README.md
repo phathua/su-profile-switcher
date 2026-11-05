@@ -34,8 +34,8 @@
 - 🎨 **Tùy biến Hồ sơ trực quan**: Tự do đổi biểu tượng Phosphor Icons (10 bộ icon chuyên dụng kiến trúc/đồ họa), chọn màu sắc nhận diện và gán tên gợi nhớ.
 - 👁️ **Xem chi tiết hồ sơ**: Xem nhanh danh sách plugin đã cài đặt và so sánh phím tắt tùy chỉnh (tự động so sánh với phím tắt gốc của SketchUp 2026).
 - 💾 **Lưu hồ sơ nhanh từ khay hệ thống**: Hộp thoại lưu nhanh từ System Tray cho phép đặt tên, chọn biểu tượng và màu sắc trực tiếp không cần mở cửa sổ chính.
-- ⌨️ **Phím tắt toàn cục (Global Hotkey)**: Gán tổ hợp phím (ví dụ: `Ctrl+Alt+1`, `Ctrl+Shift+D`) để chuyển đổi hồ sơ ngay lập tức khi đang ở ngoài màn hình desktop hay trong phần mềm khác.
-- 🔔 **Thông báo Windows Native**: Sử dụng trực tiếp Windows Toast Notification API (WinRT AUMID) chuẩn hệ điều hành với biểu tượng ứng dụng chính thức, âm thanh và hiển thị trong Action Center.
+- ⌨️ **Phím tắt toàn cục (Global Hotkey)**: Gán `Ctrl+Alt+1` trên Windows hoặc `Command+Option+1` trên Mac để chuyển hồ sơ từ ứng dụng khác.
+- 🔔 **Thông báo hệ thống**: Dùng Windows Toast trên Windows và thông báo gốc trên macOS.
 - 🛡️ **Bảo vệ toàn vẹn dữ liệu**: Tự động phát hiện khi SketchUp đang chạy, đưa ra hộp thoại cảnh báo trước khi sao chép và hỗ trợ nút **Buộc đóng SketchUp** một chạm.
 - 🔍 **Tự động nhận diện đa phiên bản**: Hỗ trợ toàn diện từ SketchUp 2021 đến SketchUp 2026 (quét cả thư mục tiêu chuẩn lẫn cấu trúc thư mục con của Trimble).
 - 🧩 **Bảo vệ Plugin Render độc lập**: Tùy chọn giữ nguyên các plugin render phức tạp (V-Ray, Enscape, D5 Render, Thea Render) tránh lỗi license khi đổi hồ sơ.
@@ -51,6 +51,15 @@ Truy cập trang [**GitHub Releases**](https://github.com/phathua/su-profile-swi
 - `SuPS-x64-v*-Setup.exe`: Bản cài đặt tự động cho Windows 64-bit tiêu chuẩn.
 - `SuPS-x86-v*-Setup.exe`: Bản cài đặt tự động cho Windows 32-bit.
 - `SuPS-arm64-v*-Setup.exe`: Bản cài đặt tự động cho Windows on ARM (Surface Pro Copilot+, Snapdragon X Elite).
+
+### macOS
+
+- `SuPS-macos-arm64-v*.dmg`: Mac Apple Silicon.
+- `SuPS-macos-x64-v*.dmg`: Mac Intel.
+
+Kéo ứng dụng trong DMG vào Applications. Bản Mac đọc profile của SketchUp 2021–2026 trong `~/Library/Application Support/SketchUp <năm>/SketchUp/`, gồm plugin, phím tắt, vật liệu, template và cấu hình thanh công cụ. CLI/MCP có thể chạy qua tệp thực thi trong `SketchUp Profile Switcher.app/Contents/MacOS/`.
+
+Khi nhập bản sao lưu từ hệ điều hành khác, ứng dụng yêu cầu chọn bỏ phím tắt hoặc chuyển `Ctrl`/`Command` và `Alt`/`Option` có cảnh báo. Plugin được giữ nguyên, nhưng plugin có mã nhị phân có thể cần cài lại. Bản DMG công khai cần chứng chỉ Apple Developer ID và notarization; các bản CI chưa ký chỉ dùng để thử nghiệm.
 
 > 💡 **Cài đặt trong AppData**: Trình cài đặt tự động cài vào thư mục `%LOCALAPPDATA%\Programs\SketchUp Profile Switcher` theo quyền người dùng hiện tại, không yêu cầu quyền Quản trị viên (UAC) và hỗ trợ tự động nâng cấp mượt mà.
 

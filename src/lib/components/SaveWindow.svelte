@@ -63,6 +63,7 @@
 
   onMount(async () => {
     await initAppStore();
+    saveToolbars = appStore.platform === "macos";
     ready = true;
     const now = new Date();
     const mm = String(now.getMonth() + 1).padStart(2, "0");

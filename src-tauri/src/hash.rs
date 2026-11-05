@@ -42,6 +42,22 @@ pub fn compute_configuration_hash(
         }
     }
 
+    #[cfg(target_os = "macos")]
+    {
+        let toolbar = if local_folder.is_some() {
+            folder.parent().and_then(|parent| parent.file_name())
+                .and_then(|name| name.to_str())
+                .and_then(|version| crate::mac_toolbar::snapshot_bytes(version).ok().flatten())
+        } else {
+            fs::read(folder.join("MacToolbar.plist")).ok()
+        };
+        if let Some(bytes) = toolbar {
+            let mut file_hasher = Sha256::new();
+            file_hasher.update(bytes);
+            buffer.push_str(&format!("toolbar:{:x};", file_hasher.finalize()));
+        }
+    }
+
     // 3. Plugins
     let plugins = if folder.join("Plugins").exists() {
         folder.join("Plugins")
@@ -103,4 +119,21 @@ pub fn find_matching_profile(
     }
 
     None
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn toolbar_change_changes_profile_hash() {
+        let temp = tempfile::tempdir().unwrap();
+        let profile = temp.path().join("profile");
+        fs::create_dir_all(&profile).unwrap();
+        fs::write(profile.join("SharedPreferences.json"), "{}").unwrap();
+        fs::write(profile.join("MacToolbar.plist"), "first").unwrap();
+        let first = compute_configuration_hash(&profile, None, false);
+        fs::write(profile.join("MacToolbar.plist"), "second").unwrap();
+        assert_ne!(first, compute_configuration_hash(&profile, None, false));
+    }
 }

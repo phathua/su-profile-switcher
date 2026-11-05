@@ -34,8 +34,8 @@
 - 🎨 **Visual Profile Customization**: Freely select Phosphor Icons (curated design & 3D workflow icons), assign accent colors, and manage distinct configurations.
 - 👁️ **Profile Inspector**: Quickly inspect installed plugins and view customized keyboard shortcuts diffed against default SketchUp 2026 shortcuts.
 - 💾 **System Tray Quick-Save**: Save the current workspace directly from the System Tray with an embedded icon and accent color picker without opening the main window.
-- ⌨️ **Global Hotkeys**: Switch profiles from anywhere with registered system-wide shortcuts (e.g., `Ctrl+Alt+1`, `Ctrl+Shift+D`).
-- 🔔 **Windows Native Notifications**: Pure WinRT Toast Notification integration with custom AUMID and application icon branding.
+- ⌨️ **Global Hotkeys**: Switch profiles from another app with `Ctrl+Alt+1` on Windows or `Command+Option+1` on Mac.
+- 🔔 **System Notifications**: Uses Windows Toast on Windows and native notifications on macOS.
 - 🛡️ **Data Integrity Protection**: Real-time process monitoring detects active SketchUp instances, prompting confirmation and offering single-click **Force Close** protection.
 - 🔍 **Multi-Version Auto Detection**: Seamlessly detects and manages configurations across SketchUp 2021 through SketchUp 2026.
 - 🧩 **Render Plugin Isolation**: Keep render engines (V-Ray, Enscape, D5 Render, Thea Render) intact to avoid licensing and path issues.
@@ -51,6 +51,15 @@ Grab the latest installer from the [**GitHub Releases**](https://github.com/phat
 - `SuPS-x64-v*-Setup.exe`: Automated installer for standard 64-bit Windows.
 - `SuPS-x86-v*-Setup.exe`: Automated installer for 32-bit Windows.
 - `SuPS-arm64-v*-Setup.exe`: Automated installer for Windows on ARM (Surface Pro Copilot+, Snapdragon X Elite).
+
+### macOS
+
+- `SuPS-macos-arm64-v*.dmg`: Apple Silicon Macs.
+- `SuPS-macos-x64-v*.dmg`: Intel Macs.
+
+Drag the app from the DMG into Applications. The macOS build uses SketchUp 2021–2026 profiles under `~/Library/Application Support/SketchUp <year>/SketchUp/`, including plugins, shortcuts, materials, templates, and toolbar settings. CLI/MCP commands are available through the executable inside `SketchUp Profile Switcher.app/Contents/MacOS/`.
+
+Cross-platform imports offer a choice to omit shortcuts or convert `Ctrl`/`Command` and `Alt`/`Option` with a warning. Plugins are imported unchanged, so extensions with native binaries may need to be reinstalled. Public DMGs require an Apple Developer ID certificate and notarization; unsigned CI artifacts are for testing only.
 
 > 💡 **AppData User Scope**: Installs by default into `%LOCALAPPDATA%\Programs\SketchUp Profile Switcher` without requiring administrative (UAC) elevation, allowing smooth seamless in-place updates.
 
